@@ -1,6 +1,6 @@
 # Crypto-to-USDC escrow funding: audit, implementation and verification
 
-Date: 25 October 2026. Base: `main` at `947d77e`. Implementation branch: `crypto-usdc-yacin`.
+Date: 25 October 2026. Audited base: `main` at `947d77e`; implementation updated without conflicts onto `d9b9dfe`, preserving the team's newly merged assistant changes. Implementation branch: `crypto-usdc-yacin`.
 
 This work targets the actual connected application in **`front/`**, not the alternative `frontend/` prototype on `frontend-yacin`. It preserves LeaseVault v3, its generated bindings, current authentication, routes, wallets, investment and settlement rules. No contract was redeployed or changed.
 
@@ -85,6 +85,8 @@ In a standalone checkout of `crypto-usdc-yacin`, use `cd front` instead of the w
 Use `npm.cmd` in restricted Windows PowerShell. Build prepares the existing generated client. Configuration remains centralized in `src/stellar/config.ts` and `deployments/testnet.json`; no new key or environment variable is required. Changing RPC/Horizon/vault through existing public overrides cannot bypass network or accepted-token checks. No new secret-bearing VITE variable is added.
 
 ## What was tested
+
+Final execution: **59 tests passed** across five files (43 new funding/SDK/render tests and 16 existing application tests). Strict TypeScript checking and the Vite production build passed. The locked-client prebuild also completed successfully. No lint script is configured. The only build advisory is the SDK-containing bundle exceeding Vite's default chunk-size threshold.
 
 Read-only live verification executed:
 
