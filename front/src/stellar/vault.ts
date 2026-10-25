@@ -171,7 +171,13 @@ export async function contractEvents(): Promise<ChainEvent[]> {
     res = next
     if (next.events.length === 0) break
   }
-  return events.map((e) => {
+  // Registry events (ArbiterApproved, ArbiterRevoked) carry an address, not a
+  // lease id, as their second topic: they are not part of any lease history.
+  const perLease = events.filter((e) => {
+    const id = e.topic[1] ? scValToNative(e.topic[1]) : undefined
+    return typeof id === 'bigint' || typeof id === 'number'
+  })
+  return perLease.map((e) => {
     const value = scValToNative(e.value)
     return {
       key: e.id,

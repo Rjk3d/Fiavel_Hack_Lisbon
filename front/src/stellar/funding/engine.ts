@@ -61,7 +61,9 @@ export class FundingEngine {
     assertCanFund(lease, this.ports.scope.payer, Math.floor(this.ports.now() / 1000))
     const wallet = await this.ports.wallet()
     validateSpend(wallet, quote)
-    if (wallet.fee > quote.fee) throw new Error('Network fees changed. Review a fresh quote.')
+    // The classic fee only prices the conversion payment. Direct funding is a single
+    // Soroban call whose fee is simulated and capped separately at signing.
+    if (quote.kind === 'path' && wallet.fee > quote.fee) throw new Error('Network fees changed. Review a fresh quote.')
     if (quote.kind === 'path') {
       const held = wallet.assets.find(asset => assetKey(asset.asset) === assetKey(this.ports.targetAsset))?.spendable ?? 0n
       if (held + quote.receive < quote.required) throw new Error('The available USDC balance changed. Review a new quote.')

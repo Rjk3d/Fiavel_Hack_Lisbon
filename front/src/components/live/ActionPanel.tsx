@@ -146,7 +146,9 @@ function StandardActionDialog({ view, action, onClose }: { view: LeaseView; acti
   const [files, setFiles] = useState<File[]>([])
   const [amount, setAmount] = useState(() => {
     if (action.fn === 'claim_damage') return ''
-    if (action.fn === 'respond') return claim ? (Number(claim.amount) / 1e7 / 2).toFixed(2) : ''
+    // Empty on purpose: if the arbiter stays silent the tenant's offer is what the
+    // landlord gets, so pre-filling half the claim would nudge the tenant to give it away.
+    if (action.fn === 'respond') return ''
     if (action.fn === 'resolve') return claim ? (Number(claim.amount) / 1e7 / 2).toFixed(2) : ''
     return ''
   })
