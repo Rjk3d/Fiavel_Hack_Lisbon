@@ -35,7 +35,7 @@ In Portugal there is no neutral deposit-protection scheme. Landlords demand a Po
 
 A Soroban contract, **LeaseVault**, holds the guarantee for the whole lease:
 - objective cases (unpaid rent, silence after a deadline) are settled by code;
-- only the disputed amount goes to a bounded arbitrator;
+- only the disputed amount goes to a bounded arbitrator, chosen from the contract's registry of approved mediators;
 - the deposit is returned by default.
 
 Target users: foreign students and expats in Lisbon, and small good-faith landlords.
@@ -45,7 +45,7 @@ Track: **Genesis + Stellar Composed**.
 
 ```
  Tenant (Ana)        Landlord (Manuel)        Arbiter
- smart account       smart account            (named in the lease)
+ smart account       smart account            (approved mediator)
       │  fund, pay_rent,     │  create_lease,          │ resolve
       │  respond, end_lease  │  claim_damage,          │
       │                      │  accept_counter         │
@@ -78,18 +78,20 @@ Track: **Genesis + Stellar Composed**.
 
 | Function | Who | Condition | Effect |
 |---|---|---|---|
-| `create_lease` | landlord | valid terms (guarantee ≥ 1 month) | records rent, guarantee, deadlines, arbiter, yield option |
-| `fund` | tenant | before the move-in deadline | locks first rent + guarantee (+ 5 % buffer with yield); supplies guarantee − 1 month to Blend if both parties opted in |
+| `create_lease` | landlord | valid terms (guarantee ≥ 1 month), arbiter in the mediator registry | records rent, guarantee, deadlines, arbiter, yield option |
+| `fund` | tenant | before the move-in deadline, arbiter still approved | locks first rent + guarantee (+ 5 % buffer with yield); supplies guarantee − 1 month to Blend if both parties opted in |
 | `confirm_move_in` | both | same inventory hash, before the deadline | releases the first rent, starts the lease |
 | `refund_no_keys` | anyone | deadline passed without move-in | everything back to the tenant |
 | `pay_rent` | tenant | months left, during the lease or late after it ended | rent straight to the landlord |
 | `claim_unpaid` | anyone (the coordinator) | due date + grace passed | one month from the guarantee to the landlord, the only possible recipient: liquid part first, then Blend |
 | `end_lease` | either party | lease term reached | records the exit hash, opens the claim window |
-| `claim_damage` | landlord | inside the claim window, ≤ guarantee left after unpaid months, posts a bond | unpaid months paid to the landlord first, undisputed part refunded to the tenant at once |
+| `claim_damage` | landlord | inside the claim window, ≤ the guarantee minus the months taken from it (`max_claim`: the tenant's buffer and yield share are never claimable), posts a bond | unpaid months paid to the landlord first, undisputed part refunded to the tenant at once |
 | `respond` / `accept_counter` | tenant / landlord | inside the response window | settle at the claim or at the counter-offer |
 | `execute_claim` | anyone | tenant silent | claim paid |
 | `resolve` | arbiter | dispute open | splits the disputed amount between the two parties only; bond forfeited if the landlord gets < 50 % |
-| `expire_dispute` | anyone | arbiter silent past the arbitration window | settles halfway between the claim and the offer, bond back to the landlord: a guarantee can never stay locked |
+| `expire_dispute` | anyone | arbiter silent past the arbitration window | settles at the tenant's offer, bond back to the landlord: a guarantee can never stay locked, and inflating a claim earns nothing |
+| `approve_arbiter` / `revoke_arbiter` | admin | — | curates the mediator registry; a revoked mediator can no longer be named or funded |
+| `register_arbiter` | the mediator | registry open (testnet only) | joins the registry by signing, so judges can play the mediator; refused on a curated registry |
 | `release` | anyone | claim window passed, no claim | months still unpaid to the landlord, then the rest + the tenant's yield share to the tenant |
 | `exit_blend` | parties anytime; anyone if at risk | loss > 0.1 % or pool utilization ≥ 95 % | brings the position back; gain shared 70 / 20 / 10 |
 | `propose_yield` | tenant or landlord | lease active, nothing invested, keeps ≥ 1 month liquid | records how much stays in the contract and the yield split; the tenant's buffer is locked if the tenant proposes, and never a second time if it is already in the contract |
@@ -99,13 +101,19 @@ Track: **Genesis + Stellar Composed**.
 
 Durations are lease parameters, so the demo runs with 1 month = 60 seconds.
 
+### Who decides a dispute
+
+The parties sign everything that commits them. A human only steps in for one case: the tenant counters a damage claim and the landlord does not accept the counter-offer. That human is a mediator from the contract's registry, not someone the landlord picks: `create_lease` and `fund` refuse any other arbiter. The arbiter can only split the disputed amount between the two parties. If the arbiter stays silent, the dispute settles at the tenant's offer: the claimant carries the burden of proof, the guarantee comes back by default, and claiming the whole guarantee to anchor a split earns nothing. The agents never decide: they explain the rules and prepare transactions that the contract checks.
+
+On testnet the registry is open (`openRegistry` in `deployments/testnet.json`) so anyone can try the mediator role; a production deployment sets it to false and the arbitration fund's operator approves mediators.
+
 ## Setup
 
 Prerequisites: Rust with the `wasm32v1-none` target, Stellar CLI, Node 20+.
 On Windows, Visual Studio Build Tools with the "Desktop development with C++" workload is required.
 
 ```bash
-# Contract: 37 unit tests (lease lifecycle, unpaid rent, disputes and arbiter timeout, Blend yield and loss,
+# Contract: 44 unit tests (lease lifecycle, unpaid rent, disputes, mediator registry and arbiter timeout, Blend yield and loss,
 # mid-lease investment, ratings)
 cargo test -p lease_vault          # Windows: scripts\cargo.cmd test -p lease_vault
 stellar contract build --package lease_vault
@@ -174,7 +182,7 @@ LeaseVault v3 (`CCSWLUOQ…SEJAZ`), two leases played in the web app:
 |---|---|
 | Lease #0: an unpaid month paid to the landlord, triggered from the arbiter's wallet (no landlord signature) | [b3b318a9…](https://stellar.expert/explorer/testnet/tx/b3b318a9d96eb4ec8dbc8ff0aa7d336268e823f40822f800f40a9a2207885da8) |
 | Lease #0: release with the last month unpaid: 100 USDC to the landlord first, the rest to the tenant | [4ba60edd…](https://stellar.expert/explorer/testnet/tx/4ba60edd07891696a5ae0dc0fca7c1c116b8c259b5520511c316c1ec381c2895) |
-| Lease #1: claim of 150, offer of 75, arbiter silent for 2 min: the tenant settles halfway (112.50 / 37.50) | [053063f6…](https://stellar.expert/explorer/testnet/tx/053063f62d895a0b0e1a3e62bce00ba6109b9be3dcb8756bad7888f940540e36) |
+| Lease #1: claim of 150, offer of 75, arbiter silent for 2 min: settled halfway (112.50 / 37.50), the v3 rule since replaced by the tenant's offer in v4 | [053063f6…](https://stellar.expert/explorer/testnet/tx/053063f62d895a0b0e1a3e62bce00ba6109b9be3dcb8756bad7888f940540e36) |
 
 LeaseVault v2 (`CDR2QYEL…GBRXP`), lease #0 played in the web app, then lease #1 for a rating below the thresholds:
 

@@ -17,6 +17,10 @@ DISPUTE_BOND=200000000 # 20 USDC, 7 decimals
 # Testnet demo values: a 3-month demo lease (3 x 60 s) with 100 USDC. Mainnet: e.g. 90 days.
 MIN_RATED_DURATION=180
 MIN_RATED_DEPOSIT=1000000000 # 100 USDC
+# Mediator registry. On testnet anyone can join it by signing, so judges can
+# play the mediator in the web app; set to false for a curated registry where
+# only the admin (the deployer here) approves mediators.
+OPEN_REGISTRY=true
 WASM=target/wasm32v1-none/release/lease_vault.wasm
 
 identity() {
@@ -66,7 +70,8 @@ echo "== deploy LeaseVault"
 VAULT=$(stellar contract deploy --wasm "$WASM" --source fiavel-deployer --network $NETWORK \
   --alias lease_vault -- \
   --token $USDC --pool $BLEND_POOL --arbitration_fund "$FUND" --dispute_bond $DISPUTE_BOND \
-  --min_rated_duration $MIN_RATED_DURATION --min_rated_deposit $MIN_RATED_DEPOSIT)
+  --min_rated_duration $MIN_RATED_DURATION --min_rated_deposit $MIN_RATED_DEPOSIT \
+  --admin "$DEPLOYER" --open_registry $OPEN_REGISTRY --arbiters "[\"$ARBITER\"]")
 echo "LeaseVault: $VAULT"
 
 mkdir -p deployments
@@ -82,6 +87,7 @@ cat > deployments/testnet.json <<EOF
   "disputeBond": "$DISPUTE_BOND",
   "minRatedDuration": "$MIN_RATED_DURATION",
   "minRatedDeposit": "$MIN_RATED_DEPOSIT",
+  "openRegistry": $OPEN_REGISTRY,
   "accounts": {
     "deployer": "$DEPLOYER",
     "landlord": "$LANDLORD",

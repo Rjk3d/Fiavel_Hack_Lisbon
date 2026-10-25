@@ -2,7 +2,8 @@
 //!
 //! Holds the first rent and the guarantee of each lease. Objective cases
 //! (unpaid rent, silence after a deadline) are settled by code; only a
-//! disputed damage amount goes to a bounded arbiter. The guarantee can
+//! disputed damage amount goes to a bounded arbiter, chosen from a registry
+//! of approved mediators. The guarantee can
 //! optionally be lent on one whitelisted Blend pool when both parties agree;
 //! the landlord is always paid before the tenant gets the remainder.
 
@@ -17,7 +18,7 @@ mod test;
 use soroban_sdk::{
     auth::{ContractContext, InvokerContractAuthEntry, SubContractInvocation},
     contract, contractevent, contractimpl, panic_with_error, token::TokenClient, vec, Address,
-    BytesN, Env, IntoVal, Symbol,
+    BytesN, Env, IntoVal, Symbol, Vec,
 };
 
 pub use blend::{BlendPoolClient, Positions, Request, Reserve, ReserveConfig, ReserveData};
@@ -170,6 +171,19 @@ pub struct Rated {
     pub counted: bool,
 }
 
+#[contractevent]
+pub struct ArbiterApproved {
+    #[topic]
+    pub arbiter: Address,
+    pub by_admin: bool,
+}
+
+#[contractevent]
+pub struct ArbiterRevoked {
+    #[topic]
+    pub arbiter: Address,
+}
+
 #[contract]
 pub struct LeaseVault;
 
@@ -183,6 +197,9 @@ impl LeaseVault {
         dispute_bond: i128,
         min_rated_duration: u64,
         min_rated_deposit: i128,
+        admin: Address,
+        open_registry: bool,
+        arbiters: Vec<Address>,
     ) {
         if dispute_bond < 0 || min_rated_deposit < 0 {
             panic_with_error!(&env, Error::InvalidAmount);
@@ -196,9 +213,55 @@ impl LeaseVault {
             dispute_bond,
             min_rated_duration,
             min_rated_deposit,
+            admin,
+            open_registry,
         };
         env.storage().instance().set(&DataKey::Config, &config);
         env.storage().instance().set(&DataKey::NextId, &0u64);
+        for a in arbiters.iter() {
+            add_arbiter(&env, &a, true);
+        }
+    }
+
+    // ── Mediator registry ───────────────────────────────────────────────
+
+    /// The admin approves a mediator. Leases can only name approved ones.
+    pub fn approve_arbiter(env: Env, arbiter: Address) {
+        config(&env).admin.require_auth();
+        add_arbiter(&env, &arbiter, true);
+    }
+
+    /// Testnet only: a mediator joins the registry by signing. Refused when
+    /// the registry is curated (`open_registry` false at deploy).
+    pub fn register_arbiter(env: Env, arbiter: Address) {
+        arbiter.require_auth();
+        if !config(&env).open_registry {
+            panic_with_error!(&env, Error::RegistryClosed);
+        }
+        add_arbiter(&env, &arbiter, false);
+    }
+
+    /// The admin removes a mediator. Leases already funded keep theirs; new
+    /// leases and pending offers can no longer use it.
+    pub fn revoke_arbiter(env: Env, arbiter: Address) {
+        config(&env).admin.require_auth();
+        let list = arbiters(&env);
+        let mut kept = Vec::new(&env);
+        for a in list.iter() {
+            if a != arbiter {
+                kept.push_back(a);
+            }
+        }
+        keep_persistent(&env, &DataKey::Arbiters, &kept);
+        ArbiterRevoked { arbiter }.publish(&env);
+    }
+
+    pub fn get_arbiters(env: Env) -> Vec<Address> {
+        arbiters(&env)
+    }
+
+    pub fn is_arbiter(env: Env, who: Address) -> bool {
+        arbiters(&env).contains(&who)
     }
 
     // ── Lease lifecycle ─────────────────────────────────────────────────
@@ -217,6 +280,8 @@ impl LeaseVault {
         {
             panic_with_error!(&env, Error::InvalidTerms);
         }
+        // The landlord cannot name a friend: only an approved mediator.
+        require_arbiter(&env, &terms.arbiter);
 
         let id: u64 = env.storage().instance().get(&DataKey::NextId).unwrap_or(0);
         env.storage().instance().set(&DataKey::NextId, &(id + 1));
@@ -267,6 +332,8 @@ impl LeaseVault {
         if tenant == lease.landlord || tenant == lease.terms.arbiter {
             panic_with_error!(&env, Error::SameParty);
         }
+        // The mediator may have been revoked since the offer was published.
+        require_arbiter(&env, &lease.terms.arbiter);
 
         let terms = lease.terms.clone();
         let yield_active = terms.yield_offered && accept_yield;
@@ -459,7 +526,7 @@ impl LeaseVault {
         }
         exit_blend_all(&env, &cfg, id, &mut lease);
         settle_unpaid(&env, &cfg, id, &mut lease);
-        if amount <= 0 || amount > lease.liquid {
+        if amount <= 0 || amount > claimable(&lease, lease.months_unpaid as i128, lease.liquid) {
             panic_with_error!(&env, Error::InvalidAmount);
         }
         if cfg.dispute_bond > 0 {
@@ -560,8 +627,10 @@ impl LeaseVault {
     }
 
     /// The arbiter did not decide within the arbitration window: the dispute
-    /// is settled halfway between the claim and the tenant's offer, and the
-    /// bond goes back to the landlord. Callable by anyone.
+    /// is settled at the tenant's offer, since the claimant carries the burden
+    /// of proof and the guarantee comes back by default. A halfway split
+    /// would reward inflated claims. The bond goes back to the landlord: the
+    /// arbiter's silence is not the landlord's fault. Callable by anyone.
     pub fn expire_dispute(env: Env, id: u64) {
         let cfg = config(&env);
         let mut lease = load(&env, id);
@@ -570,7 +639,7 @@ impl LeaseVault {
         if now(&env) <= claim.answered_at + lease.terms.arbitration_window {
             panic_with_error!(&env, Error::TooEarly);
         }
-        let to_landlord = (claim.amount + claim.offer.unwrap_or(0)) / 2;
+        let to_landlord = claim.offer.unwrap_or(0);
         settle(&env, &cfg, id, &mut lease, to_landlord, false);
         save(&env, id, &lease);
     }
@@ -822,6 +891,20 @@ impl LeaseVault {
         config(&env)
     }
 
+    /// Most the landlord can still claim for damage once the lease ended:
+    /// the guarantee itself, minus the months already taken from it. The
+    /// tenant's buffer and yield share are never claimable.
+    /// Takes into account the Blend position and the months still unpaid,
+    /// which `claim_damage` pays to the landlord first.
+    pub fn max_claim(env: Env, id: u64) -> i128 {
+        let cfg = config(&env);
+        let lease = load(&env, id);
+        let held = lease.liquid + blend_value(&env, &cfg, &lease);
+        let unpaid = (lease.terms.months - lease.months_settled.min(lease.terms.months)) as i128;
+        let owed = lease.terms.rent * unpaid;
+        claimable(&lease, lease.months_unpaid as i128 + unpaid, (held - owed).max(0))
+    }
+
     /// Current value of the lease's guarantee: liquid part plus Blend position.
     pub fn guarantee_value(env: Env, id: u64) -> i128 {
         let cfg = config(&env);
@@ -929,6 +1012,47 @@ fn drop_proposal(env: &Env, cfg: &Config, id: u64, lease: &Lease) {
             .remove(&DataKey::YieldProposal(id));
         YieldCancelled { id, refunded }.publish(env);
     }
+}
+
+fn arbiters(env: &Env) -> Vec<Address> {
+    let key = DataKey::Arbiters;
+    let list: Vec<Address> = env
+        .storage()
+        .persistent()
+        .get(&key)
+        .unwrap_or_else(|| Vec::new(env));
+    if !list.is_empty() {
+        env.storage()
+            .persistent()
+            .extend_ttl(&key, TTL_THRESHOLD, TTL_EXTEND_TO);
+    }
+    list
+}
+
+fn add_arbiter(env: &Env, arbiter: &Address, by_admin: bool) {
+    let mut list = arbiters(env);
+    if !list.contains(arbiter) {
+        list.push_back(arbiter.clone());
+        keep_persistent(env, &DataKey::Arbiters, &list);
+        ArbiterApproved {
+            arbiter: arbiter.clone(),
+            by_admin,
+        }
+        .publish(env);
+    }
+}
+
+fn require_arbiter(env: &Env, arbiter: &Address) {
+    if !arbiters(env).contains(arbiter) {
+        panic_with_error!(env, Error::ArbiterNotApproved);
+    }
+}
+
+/// The guarantee left after the months taken from it, capped by what the
+/// contract actually holds (a Blend loss lowers it).
+fn claimable(lease: &Lease, months_taken: i128, held: i128) -> i128 {
+    let left = lease.terms.deposit - lease.terms.rent * months_taken;
+    left.max(0).min(held)
 }
 
 fn require_status(env: &Env, lease: &Lease, status: Status) {

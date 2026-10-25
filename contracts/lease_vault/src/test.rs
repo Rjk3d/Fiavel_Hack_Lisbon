@@ -178,10 +178,16 @@ struct Setup {
     tenant: Address,
     arbiter: Address,
     fund: Address,
+    admin: Address,
     stranger: Address,
 }
 
 fn setup() -> Setup {
+    setup_with(false)
+}
+
+/// `open_registry`: testnet mode, where mediators can register themselves.
+fn setup_with(open_registry: bool) -> Setup {
     let env = Env::default();
     env.mock_all_auths();
     env.ledger().set_timestamp(T0);
@@ -191,6 +197,8 @@ fn setup() -> Setup {
     let token_id = sac_contract.address();
     let pool_id = env.register(MockPool, (token_id.clone(),));
     let fund = Address::generate(&env);
+    let admin = Address::generate(&env);
+    let arbiter = Address::generate(&env);
     let vault_id = env.register(
         LeaseVault,
         (
@@ -200,6 +208,9 @@ fn setup() -> Setup {
             BOND,
             MIN_RATED_DURATION,
             MIN_RATED_DEPOSIT,
+            admin.clone(),
+            open_registry,
+            Vec::from_array(&env, [arbiter.clone()]),
         ),
     );
 
@@ -210,8 +221,9 @@ fn setup() -> Setup {
         pool: MockPoolClient::new(&env, &pool_id),
         landlord: Address::generate(&env),
         tenant: Address::generate(&env),
-        arbiter: Address::generate(&env),
+        arbiter,
         fund,
+        admin,
         stranger: Address::generate(&env),
         env,
     };
@@ -597,9 +609,9 @@ fn a_silent_arbiter_cannot_lock_the_guarantee() {
     s.at(T0 + 180 + 61);
     s.vault.expire_dispute(&id);
 
-    // Halfway between 400 and 100, and the bond back to the landlord.
-    assert_eq!(s.bal(&s.landlord), landlord_before + 250 * U);
-    assert_eq!(s.bal(&s.tenant), tenant_before + DEPOSIT - 250 * U);
+    // Settled at the tenant's offer, and the bond back to the landlord.
+    assert_eq!(s.bal(&s.landlord), landlord_before + 100 * U);
+    assert_eq!(s.bal(&s.tenant), tenant_before + DEPOSIT - 100 * U);
     assert_eq!(s.bal(&s.fund), 0);
     assert_eq!(s.vault.get_lease(&id).status, Status::Closed);
     assert_eq!(s.vault.try_resolve(&id, &0), Err(Ok(err(Error::WrongStatus))));
@@ -1048,4 +1060,111 @@ fn the_tenant_buffer_is_never_locked_twice() {
     let lease = s.vault.get_lease(&id);
     assert_eq!(lease.liquid + lease.placed, DEPOSIT + BUFFER);
     assert_eq!(s.vault.guarantee_value(&id), DEPOSIT + BUFFER);
+}
+
+// ── Disputes: incentives ────────────────────────────────────────────────
+
+#[test]
+fn an_inflated_claim_earns_nothing_when_the_arbiter_is_silent() {
+    let s = setup();
+    let id = s.ended_lease(false);
+    let tenant_before = s.bal(&s.tenant);
+    let landlord_before = s.bal(&s.landlord);
+    // The landlord claims the whole guarantee, the tenant offers nothing.
+    s.vault.claim_damage(&id, &DEPOSIT, &s.hash(3));
+    s.vault.respond(&id, &0);
+    s.at(T0 + 180 + 61);
+    s.vault.expire_dispute(&id);
+    // A halfway split would have given 650 USDC; the guarantee comes back.
+    assert_eq!(s.bal(&s.landlord), landlord_before);
+    assert_eq!(s.bal(&s.tenant), tenant_before + DEPOSIT);
+    assert_eq!(s.bal(&s.vault.address), 0);
+}
+
+#[test]
+fn the_buffer_and_the_yield_are_never_claimable() {
+    let s = setup();
+    let id = s.ended_lease(true);
+    // Blend earned 10 % on the 650 USDC placed; the buffer is in the contract too.
+    s.sac.mint(&s.pool.address, &(65 * U));
+    s.pool.set_b_rate(&(RATE_SCALAR * 11 / 10));
+    assert_eq!(s.vault.max_claim(&id), DEPOSIT);
+    assert_eq!(
+        s.vault.try_claim_damage(&id, &(DEPOSIT + 1), &s.hash(3)),
+        Err(Ok(err(Error::InvalidAmount)))
+    );
+    let tenant_before = s.bal(&s.tenant);
+    s.vault.claim_damage(&id, &DEPOSIT, &s.hash(3));
+    // The tenant got the buffer and its 70 % of the gain back at once.
+    let gain = (DEPOSIT - RENT) / 10;
+    assert_eq!(s.bal(&s.tenant), tenant_before + BUFFER + gain * 7_000 / 10_000);
+}
+
+#[test]
+fn months_taken_from_the_guarantee_lower_the_claim_cap() {
+    let s = setup();
+    let id = s.active_lease(false);
+    // Month 1 unpaid and taken from the guarantee, month 2 paid.
+    s.at(T0 + 60 + 11);
+    s.vault.claim_unpaid(&id);
+    s.vault.pay_rent(&id);
+    s.at(T0 + 180);
+    s.vault.end_lease(&id, &s.tenant, &None);
+    assert_eq!(s.vault.max_claim(&id), DEPOSIT - RENT);
+    assert_eq!(
+        s.vault.try_claim_damage(&id, &(DEPOSIT - RENT + 1), &s.hash(3)),
+        Err(Ok(err(Error::InvalidAmount)))
+    );
+}
+
+// ── Mediator registry ───────────────────────────────────────────────────
+
+#[test]
+fn a_lease_can_only_name_an_approved_mediator() {
+    let s = setup();
+    let mut t = s.terms(false);
+    t.arbiter = s.stranger.clone(); // the landlord's friend
+    assert_eq!(
+        s.vault.try_create_lease(&s.landlord, &t),
+        Err(Ok(err(Error::ArbiterNotApproved)))
+    );
+    assert!(s.vault.is_arbiter(&s.arbiter));
+    assert!(!s.vault.is_arbiter(&s.stranger));
+}
+
+#[test]
+fn only_the_admin_curates_a_closed_registry() {
+    let s = setup();
+    assert_eq!(
+        s.vault.try_register_arbiter(&s.stranger),
+        Err(Ok(err(Error::RegistryClosed)))
+    );
+    s.vault.approve_arbiter(&s.stranger);
+    let auths = s.env.auths();
+    assert_eq!(auths[0].0, s.admin);
+    assert_eq!(s.vault.get_arbiters().len(), 2);
+    // Approving twice does not duplicate the entry.
+    s.vault.approve_arbiter(&s.stranger);
+    assert_eq!(s.vault.get_arbiters().len(), 2);
+}
+
+#[test]
+fn an_open_registry_lets_mediators_join_by_signing() {
+    let s = setup_with(true);
+    s.vault.register_arbiter(&s.stranger);
+    let auths = s.env.auths();
+    assert_eq!(auths[0].0, s.stranger);
+    assert!(s.vault.is_arbiter(&s.stranger));
+}
+
+#[test]
+fn a_revoked_mediator_blocks_funding_of_a_pending_offer() {
+    let s = setup();
+    let id = s.vault.create_lease(&s.landlord, &s.terms(false));
+    s.vault.revoke_arbiter(&s.arbiter);
+    assert!(!s.vault.is_arbiter(&s.arbiter));
+    assert_eq!(
+        s.vault.try_fund(&id, &s.tenant, &false),
+        Err(Ok(err(Error::ArbiterNotApproved)))
+    );
 }

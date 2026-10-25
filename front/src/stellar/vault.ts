@@ -87,6 +87,31 @@ export async function reputationOf(address: string): Promise<Reputation | null> 
   }
 }
 
+export interface MediatorRegistry {
+  /** Approved mediators, in the order they joined. */
+  arbiters: string[]
+  /** Testnet: anyone can join by signing. Curated (admin only) otherwise. */
+  open: boolean
+}
+
+/**
+ * The contract's mediator registry (LeaseVault v4). Called through an untyped view
+ * so the app still runs on an older deployment or client: it then gets null and
+ * falls back to a free arbiter field.
+ */
+export async function mediatorRegistry(): Promise<MediatorRegistry | null> {
+  const views = reader as unknown as Record<string, ((a?: unknown) => Promise<{ result: unknown }>) | undefined>
+  if (!views.get_arbiters || !views.get_config) return null
+  try {
+    const [list, cfg] = await Promise.all([views.get_arbiters(), views.get_config()])
+    const config = cfg.result as { open_registry?: boolean }
+    if (typeof config.open_registry !== 'boolean') return null
+    return { arbiters: (list.result as string[]).map(String), open: config.open_registry }
+  } catch {
+    return null
+  }
+}
+
 export interface ChainEvent {
   key: string
   name: string
@@ -145,6 +170,8 @@ const PLAIN: Record<string, string> = {
   AlreadyConfirmed: 'You already confirmed this.',
   AlreadyRated: 'You already rated this lease.',
   InvalidScore: 'A rating is a whole number from 1 to 5.',
+  ArbiterNotApproved: 'This arbiter is not an approved mediator. Pick one from the registry.',
+  RegistryClosed: 'The mediator registry is curated: only its admin can approve a mediator.',
 }
 
 export const plainError = (e: unknown) => {

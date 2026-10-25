@@ -120,8 +120,9 @@ export function explainRule(rule: RuleId, context: Context, lang: Lang = "en"): 
         `If the tenant counters, the landlord can accept the offer, or the arbiter named in the lease decides. ` +
         `The arbiter can only split the disputed amount between the two parties: ` +
         `the contract refuses any other destination or a larger amount. ` +
-        `If the arbiter does not decide within ${duration(t.arbitration_window)}, anyone can settle halfway ` +
-        `between the claim and the offer, so the guarantee can never stay locked.`
+        `The arbiter must be an approved mediator from the contract's registry: the landlord cannot name a friend. ` +
+        `If the arbiter does not decide within ${duration(t.arbitration_window)}, anyone can settle at the tenant's offer: ` +
+        `the guarantee can never stay locked, and inflating a claim earns nothing.`
       );
     case "dispute_bond":
       return (
@@ -218,8 +219,9 @@ function explainRuleFr(rule: RuleId, { lease, disputeBond }: Context): string {
         `Si le locataire fait une contre-proposition, le propriétaire peut l'accepter, sinon l'arbitre nommé dans le bail décide. ` +
         `L'arbitre peut seulement répartir le montant contesté entre les deux parties : ` +
         `le contrat refuse toute autre destination ou un montant plus élevé. ` +
-        `Si l'arbitre ne décide pas dans un délai de ${dureeFr(t.arbitration_window)}, n'importe qui peut régler à mi-chemin ` +
-        `entre la réclamation et l'offre, donc la garantie ne peut jamais rester bloquée.`
+        `L'arbitre doit être un médiateur agréé, inscrit au registre du contrat : le propriétaire ne peut pas nommer un ami. ` +
+        `Si l'arbitre ne décide pas dans un délai de ${dureeFr(t.arbitration_window)}, n'importe qui peut régler au montant offert par le locataire : ` +
+        `la garantie ne peut jamais rester bloquée, et gonfler une réclamation ne rapporte rien.`
       );
     case "dispute_bond":
       return (

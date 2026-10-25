@@ -395,8 +395,9 @@ function factsFor(action: Action, view: LeaseView): { label: ReactNode; value: R
         { label: 'To the landlord, from the guarantee', value: usdc(t.rent) },
       ]
     case 'release': {
-      const left = damageClaimable(view.snap)
-      const owed = guaranteeValue - left
+      const unsettled = BigInt(Math.max(0, lease.terms.months - lease.months_settled)) * lease.terms.rent
+      const owed = unsettled < guaranteeValue ? unsettled : guaranteeValue
+      const left = guaranteeValue - owed
       return [
         ...(owed > 0n ? [{ label: 'Unpaid months, to the landlord', value: usdc(owed) }] : []),
         { label: 'Back to the tenant', value: usdc(left) },
@@ -407,7 +408,7 @@ function factsFor(action: Action, view: LeaseView): { label: ReactNode; value: R
         ? [
             { label: 'Claimed', value: usdc(claim.amount) },
             { label: 'Tenant offer', value: usdc(claim.offer ?? 0n) },
-            { label: 'To the landlord (halfway)', value: usdc((claim.amount + (claim.offer ?? 0n)) / 2n) },
+            { label: "To the landlord (the tenant's offer)", value: usdc(claim.offer ?? 0n) },
             { label: 'Dispute bond', value: 'Back to the landlord' },
           ]
         : []
