@@ -7,6 +7,7 @@ import { ActionPanel } from '../../components/live/ActionPanel'
 import { GuaranteeHero, InviteBox, LeaseRow, NextRentCard, NoFunds } from '../../components/live/cards'
 import { NewLeaseDialog } from '../../components/live/NewLeaseDialog'
 import { InvestCard } from '../../components/live/invest'
+import { TermsReview } from '../../components/live/TermsReview'
 import { PartiesCard } from '../../components/live/reputation'
 import { MONTH_PILL, months, statusOf, toActivity } from '../../components/live/lease-view'
 import { ActivityList } from '../../components/dashboard/ActivityList'
@@ -51,7 +52,7 @@ export function LiveOverview() {
       </header>
 
       <NoFunds />
-      {!live.ready ? (
+      {!live.ready || (live.connection === 'offline' && !live.mine.length) ? (
         <Skeleton className="h-[320px]" />
       ) : live.role === 'arbiter' ? (
         <ArbiterOverview />
@@ -59,7 +60,7 @@ export function LiveOverview() {
         <section className="card">
           <EmptyState
             icon={<Inbox size={22} />}
-            title={live.role === 'tenant' ? 'No lease yet' : 'No lease yet'}
+            title="No lease yet"
             body={
               live.role === 'tenant'
                 ? 'Open the invite link your landlord sent you. In this demo: switch to Landlord, create a lease, then open its invite.'
@@ -367,6 +368,7 @@ export function JoinPage() {
   const live = useLive()
   const leaseId = BigInt(id ?? '0')
   const [missing, setMissing] = useState(false)
+  const [accepted, setAccepted] = useState(false)
 
   useEffect(() => {
     if (live.role !== 'tenant') live.setRole('tenant')
@@ -384,7 +386,6 @@ export function JoinPage() {
       </section>
     )
   if (!view) return <Skeleton className="h-[420px]" />
-  const t = view.snap.lease.terms
   if (view.snap.lease.status.tag !== 'Created') {
     return <Navigate to={`/app/leases/${leaseId}`} replace />
   }
@@ -404,18 +405,14 @@ export function JoinPage() {
           </div>
         </section>
         <div className="space-y-6">
-          <section className="card p-5 sm:p-6">
-            <SectionHeader title="Terms" />
-            <FactRows
-              rows={[
-                { label: 'Rent', value: `${usdc(t.rent)} / ${duration(t.period)}` },
-                { label: 'Months', value: t.months },
-                { label: 'Guarantee', value: usdc(t.deposit) },
-                { label: 'Landlord', value: <span className="font-mono text-[12px]">{short(view.snap.lease.landlord)}</span> },
-              ]}
-            />
-          </section>
-          <ActionPanel view={view} />
+          <TermsReview view={view} accepted={accepted} onAccept={setAccepted} />
+          {accepted ? (
+            <ActionPanel view={view} />
+          ) : (
+            <p className="rounded-2xl border border-dashed border-line px-4 py-3 text-[13px] text-ink-muted">
+              Tick the box above to see the funding options.
+            </p>
+          )}
         </div>
       </div>
     </div>

@@ -17,6 +17,15 @@ DISPUTE_BOND=200000000 # 20 USDC, 7 decimals
 # Testnet demo values: a 3-month demo lease (3 x 60 s) with 100 USDC. Mainnet: e.g. 90 days.
 MIN_RATED_DURATION=180
 MIN_RATED_DEPOSIT=1000000000 # 100 USDC
+# Every lease window (move-in, claim, response, arbitration) and the period must be
+# between these bounds. Testnet keeps 30 s so the demo can run 1 month = 1 minute;
+# a mainnet deployment would use days (e.g. 259200 = 3 days).
+MIN_WINDOW=30
+MAX_WINDOW=7776000 # 90 days
+# Approved arbiters, as a JSON list of addresses. Empty = any arbiter (needed by the web demo,
+# where each browser creates its own arbiter wallet). In production, list the mediators:
+#   ARBITERS='["G...","G..."]' bash scripts/deploy-testnet.sh
+ARBITERS=${ARBITERS:-[]}
 WASM=target/wasm32v1-none/release/lease_vault.wasm
 
 identity() {
@@ -66,7 +75,8 @@ echo "== deploy LeaseVault"
 VAULT=$(stellar contract deploy --wasm "$WASM" --source fiavel-deployer --network $NETWORK \
   --alias lease_vault -- \
   --token $USDC --pool $BLEND_POOL --arbitration_fund "$FUND" --dispute_bond $DISPUTE_BOND \
-  --min_rated_duration $MIN_RATED_DURATION --min_rated_deposit $MIN_RATED_DEPOSIT)
+  --min_rated_duration $MIN_RATED_DURATION --min_rated_deposit $MIN_RATED_DEPOSIT \
+  --min_window $MIN_WINDOW --max_window $MAX_WINDOW --arbiters "$ARBITERS")
 echo "LeaseVault: $VAULT"
 
 mkdir -p deployments
@@ -82,6 +92,9 @@ cat > deployments/testnet.json <<EOF
   "disputeBond": "$DISPUTE_BOND",
   "minRatedDuration": "$MIN_RATED_DURATION",
   "minRatedDeposit": "$MIN_RATED_DEPOSIT",
+  "minWindow": "$MIN_WINDOW",
+  "maxWindow": "$MAX_WINDOW",
+  "arbiters": $ARBITERS,
   "accounts": {
     "deployer": "$DEPLOYER",
     "landlord": "$LANDLORD",

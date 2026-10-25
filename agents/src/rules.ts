@@ -75,6 +75,11 @@ export interface Snapshot {
   guaranteeValue: bigint;
   /** From `blend_at_risk`: anyone may pull the lease out of Blend. */
   blendAtRisk: boolean;
+  /**
+   * LeaseVault v4: damage claims are capped at the guarantee (the tenant's buffer
+   * and yield share are out of reach), and lease windows are bounded at deploy.
+   */
+  v4?: boolean;
 }
 
 export interface Action {
@@ -152,8 +157,72 @@ export function timeline(lease: Lease) {
  */
 export function damageClaimable(s: Snapshot): bigint {
   const t = s.lease.terms;
-  const owed = BigInt(t.months - s.lease.months_settled) * t.rent;
-  return s.guaranteeValue > owed ? s.guaranteeValue - owed : 0n;
+  const unpaidLeft = BigInt(t.months - s.lease.months_settled);
+  const owed = unpaidLeft * t.rent;
+  const left = s.guaranteeValue > owed ? s.guaranteeValue - owed : 0n;
+  if (!s.v4) return left;
+  // v4: never more than the deposit minus every month taken from it.
+  const landlordPart = t.deposit - t.rent * (BigInt(s.lease.months_unpaid) + unpaidLeft);
+  const cap = landlordPart > 0n ? landlordPart : 0n;
+  return cap < left ? cap : left;
+}
+
+/** An arbiter's public track record (`get_arbiter_record`). */
+export interface ArbiterRecord {
+  cases: number;
+  claimed: bigint;
+  to_landlord: bigint;
+}
+
+export interface RiskFlag {
+  level: "danger" | "warning";
+  text: string;
+}
+
+const DAY = 86_400;
+
+/**
+ * What a tenant should look at twice before funding. Pure function of the terms
+ * and of the arbiter's record: the same checks in the CLI, the invite page and tests.
+ */
+export function riskFlags(lease: Lease, arbiter?: ArbiterRecord): RiskFlag[] {
+  const t = lease.terms;
+  const flags: RiskFlag[] = [];
+  const period = n(t.period);
+  // Demo leases run in seconds: judge windows against the rental month there.
+  const real = period >= DAY;
+  const short = (w: number, realMin: number, label: string) => {
+    if (real ? w < realMin : w < period / 2) {
+      flags.push({ level: "danger", text: `${label} is very short (${span(w)}): you could miss it.` });
+    }
+  };
+  short(n(t.response_window), 3 * DAY, "The time to answer a damage claim");
+  short(n(t.move_in_window), 2 * DAY, "The time to fund and confirm move-in");
+  if (real && n(t.claim_window) > 60 * DAY) {
+    flags.push({ level: "warning", text: `The guarantee can stay locked ${span(n(t.claim_window))} after the lease while the landlord may still claim.` });
+  }
+  if (real && n(t.arbitration_window) > 60 * DAY) {
+    flags.push({ level: "warning", text: `A dispute can wait ${span(n(t.arbitration_window))} for the arbiter before settling halfway.` });
+  }
+  if (n(t.grace) === 0) flags.push({ level: "warning", text: "No grace period: a late payment can be taken from the guarantee at once." });
+  if (t.deposit > 3n * t.rent) flags.push({ level: "warning", text: `The guarantee (${usdc(t.deposit)}) is more than three months of rent.` });
+  if (t.yield_offered && t.landlord_share_bps > t.tenant_share_bps) {
+    flags.push({ level: "warning", text: "If you accept the yield option, the landlord would get a larger share of the gain than you." });
+  }
+  if (t.yield_offered && t.buffer_bps > 1000) {
+    flags.push({ level: "warning", text: `Accepting the yield option locks a ${t.buffer_bps / 100} % buffer on top of the guarantee.` });
+  }
+  if (arbiter && arbiter.cases >= 3 && arbiter.claimed > 0n && arbiter.to_landlord * 100n > arbiter.claimed * 80n) {
+    flags.push({ level: "danger", text: `The arbiter awarded landlords over 80 % of what they claimed across ${arbiter.cases} disputes.` });
+  }
+  return flags;
+}
+
+function span(seconds: number): string {
+  if (seconds >= DAY) return `${Math.round(seconds / DAY)} day(s)`;
+  if (seconds >= 3600) return `${Math.round(seconds / 3600)} hour(s)`;
+  if (seconds >= 60) return `${Math.round(seconds / 60)} minute(s)`;
+  return `${seconds} second(s)`;
 }
 
 /**

@@ -3,7 +3,11 @@ import { LifecycleTimeline } from '../lease/LifecycleTimeline'
 import { AgentMark } from '../ai/AgentMark'
 import { DEMO_TODAY, seedLeases, seedPayments } from '../../lib/demo-data'
 import { claimDeadline, lifecycle, nextPayment } from '../../lib/lease-logic'
-import { daysBetween, formatDate, formatDateShort, formatEUR } from '../../lib/formatters'
+import { daysBetween, formatDate, formatDateShort } from '../../lib/formatters'
+import { usdc } from '../../stellar/format'
+
+/** The app settles in USDC (the asset Blend's testnet pool lends): the illustration uses the same unit. */
+const formatAmount = (amount: number) => usdc(BigInt(Math.round(amount)) * 10_000_000n, { decimals: 0 })
 
 /** The hero's product screen, rendered from the same seeded data the app uses. */
 export function PhonePreview() {
@@ -47,14 +51,14 @@ export function PhonePreview() {
                   <span className="rounded-full bg-brand-tint px-2 py-0.5 text-[10px] font-semibold text-brand">Protected</span>
                 </div>
                 <div className="mt-1 flex items-end justify-between">
-                  <p className="tnum text-[22px] font-semibold tracking-[-0.02em]">{formatEUR(lease.deposit)}</p>
+                  <p className="tnum text-[22px] font-semibold tracking-[-0.02em]">{formatAmount(lease.deposit)}</p>
                   <p className="text-[10px] text-ink-muted">Release by {formatDate(claimDeadline(lease))}</p>
                 </div>
               </div>
               <div className="rounded-2xl bg-white p-3.5 shadow-card">
                 <div className="flex items-center justify-between">
                   <p className="text-[13px] font-semibold">{next.period.split(' ')[0]} rent</p>
-                  <p className="tnum text-[13px] font-semibold">{formatEUR(next.amount)}</p>
+                  <p className="tnum text-[13px] font-semibold">{formatAmount(next.amount)}</p>
                 </div>
                 <div className="mt-1.5 flex items-center gap-2">
                   <span className="rounded-full bg-warning-tint px-2 py-0.5 text-[10px] font-semibold text-warning">Upcoming</span>
@@ -75,7 +79,7 @@ export function PhonePreview() {
           <p className="text-[12px] font-semibold">Tenant Guardian</p>
         </div>
         <p className="mt-2 text-[12px] leading-[17px] text-ink-muted">
-          Your {formatEUR(lease.deposit)} is held under your lease rules. Neither side can move it alone.
+          Your {formatAmount(lease.deposit)} is held under your lease rules. Neither side can move it alone.
         </p>
       </div>
       <div className="absolute -right-1 bottom-[12%] hidden items-center gap-2.5 rounded-2xl bg-white px-3.5 py-3 shadow-lift sm:flex lg:-right-6">

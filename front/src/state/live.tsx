@@ -3,7 +3,7 @@ import { analyze, type Insight, type Snapshot } from '@agents/rules'
 import { useToast } from '../components/ui/Toast'
 import { NETWORK, explorerTx } from '../stellar/config'
 import { balances as loadBalances, fund as fundWallet, loadWallet, ROLES, type Balances, type LiveRole, type Wallet } from '../stellar/wallets'
-import { contractEvents, getLease, invoke, leaseCount, plainError, snapshotOf, type ChainEvent } from '../stellar/vault'
+import { contractEvents, getLease, invoke, leaseCount, ping, plainError, snapshotOf, type ChainEvent } from '../stellar/vault'
 
 /**
  * Live state: three testnet wallets (one per role), every lease that involves them,
@@ -47,6 +47,10 @@ interface Live {
   now: number
   ready: boolean
   error: string | null
+  /** Whether Stellar Testnet answers: drives the status pill and the offline banner. */
+  connection: 'connecting' | 'live' | 'offline'
+  /** Last ledger seen, for the status pill. */
+  ledger: number | null
   busy: string | null
   refresh: () => Promise<void>
   run: (fn: string, args: Record<string, unknown>, label: string, leaseId?: bigint) => Promise<{ hash: string; result: unknown } | null>
@@ -89,6 +93,8 @@ export function LiveProvider({ children }: { children: ReactNode }) {
   const [now, setNow] = useState(() => Math.floor(Date.now() / 1000))
   const [ready, setReady] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [connection, setConnection] = useState<Live['connection']>('connecting')
+  const [ledger, setLedger] = useState<number | null>(null)
   const [busy, setBusy] = useState<string | null>(null)
   const watched = useRef<Set<string>>(new Set(read<string[]>('watched', [])))
   const metas = useRef<Record<string, LeaseMeta>>(read('meta', {}))
@@ -123,8 +129,20 @@ export function LiveProvider({ children }: { children: ReactNode }) {
     setEvents(await contractEvents())
   }, [])
 
+  const checkConnection = useCallback(async () => {
+    try {
+      setLedger(await ping())
+      setConnection('live')
+      return true
+    } catch {
+      setConnection('offline')
+      return false
+    }
+  }, [])
+
   const refresh = useCallback(async () => {
     try {
+      if (!(await checkConnection())) throw new Error('Stellar Testnet does not answer.')
       await Promise.all([refreshLeases(), refreshBalances()])
       setError(null)
     } catch (e) {
@@ -132,7 +150,7 @@ export function LiveProvider({ children }: { children: ReactNode }) {
     } finally {
       setReady(true)
     }
-  }, [refreshLeases, refreshBalances])
+  }, [checkConnection, refreshLeases, refreshBalances])
 
   // Clock for countdowns, and polling of the chain.
   useEffect(() => {
@@ -145,8 +163,9 @@ export function LiveProvider({ children }: { children: ReactNode }) {
     const a = setInterval(() => void refreshLeases().catch(() => {}), 5000)
     const b = setInterval(() => void refreshEvents().catch(() => {}), 10000)
     const c = setInterval(() => void refreshBalances().catch(() => {}), 15000)
-    return () => [a, b, c].forEach(clearInterval)
-  }, [refresh, refreshEvents, refreshLeases, refreshBalances])
+    const d = setInterval(() => void checkConnection(), 10000)
+    return () => [a, b, c, d].forEach(clearInterval)
+  }, [refresh, refreshEvents, refreshLeases, refreshBalances, checkConnection])
 
   // Keep the rule engine's clock current between polls.
   const live = useMemo(
@@ -247,6 +266,8 @@ export function LiveProvider({ children }: { children: ReactNode }) {
     now,
     ready,
     error,
+    connection,
+    ledger,
     busy,
     refresh,
     run,

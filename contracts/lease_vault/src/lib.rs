@@ -17,12 +17,13 @@ mod test;
 use soroban_sdk::{
     auth::{ContractContext, InvokerContractAuthEntry, SubContractInvocation},
     contract, contractevent, contractimpl, panic_with_error, token::TokenClient, vec, Address,
-    BytesN, Env, IntoVal, Symbol,
+    BytesN, Env, IntoVal, Symbol, Vec,
 };
 
 pub use blend::{BlendPoolClient, Positions, Request, Reserve, ReserveConfig, ReserveData};
 pub use types::{
-    Claim, Config, DataKey, Error, Lease, LeaseRatings, Reputation, Status, Terms, YieldProposal,
+    ArbiterRecord, Claim, Config, DataKey, Error, Lease, LeaseRatings, Reputation, Status, Terms,
+    YieldProposal,
 };
 
 const BPS: i128 = 10_000;
@@ -175,6 +176,7 @@ pub struct LeaseVault;
 
 #[contractimpl]
 impl LeaseVault {
+    #[allow(clippy::too_many_arguments)]
     pub fn __constructor(
         env: Env,
         token: Address,
@@ -183,8 +185,11 @@ impl LeaseVault {
         dispute_bond: i128,
         min_rated_duration: u64,
         min_rated_deposit: i128,
+        min_window: u64,
+        max_window: u64,
+        arbiters: Vec<Address>,
     ) {
-        if dispute_bond < 0 || min_rated_deposit < 0 {
+        if dispute_bond < 0 || min_rated_deposit < 0 || min_window == 0 || max_window < min_window {
             panic_with_error!(&env, Error::InvalidAmount);
         }
         let reserve = BlendPoolClient::new(&env, &pool).get_reserve(&token);
@@ -196,6 +201,9 @@ impl LeaseVault {
             dispute_bond,
             min_rated_duration,
             min_rated_deposit,
+            min_window,
+            max_window,
+            arbiters,
         };
         env.storage().instance().set(&DataKey::Config, &config);
         env.storage().instance().set(&DataKey::NextId, &0u64);
@@ -216,6 +224,24 @@ impl LeaseVault {
             || terms.arbiter == landlord
         {
             panic_with_error!(&env, Error::InvalidTerms);
+        }
+        let cfg = config(&env);
+        let windows = [
+            terms.period,
+            terms.move_in_window,
+            terms.claim_window,
+            terms.response_window,
+            terms.arbitration_window,
+        ];
+        if windows
+            .iter()
+            .any(|w| *w < cfg.min_window || *w > cfg.max_window)
+            || terms.grace > cfg.max_window
+        {
+            panic_with_error!(&env, Error::InvalidTerms);
+        }
+        if !cfg.arbiters.is_empty() && !cfg.arbiters.contains(&terms.arbiter) {
+            panic_with_error!(&env, Error::UnknownArbiter);
         }
 
         let id: u64 = env.storage().instance().get(&DataKey::NextId).unwrap_or(0);
@@ -459,7 +485,7 @@ impl LeaseVault {
         }
         exit_blend_all(&env, &cfg, id, &mut lease);
         settle_unpaid(&env, &cfg, id, &mut lease);
-        if amount <= 0 || amount > lease.liquid {
+        if amount <= 0 || amount > damage_cap(&lease) {
             panic_with_error!(&env, Error::InvalidAmount);
         }
         if cfg.dispute_bond > 0 {
@@ -555,6 +581,12 @@ impl LeaseVault {
             panic_with_error!(&env, Error::InvalidAmount);
         }
         let forfeit = to_landlord * 2 < claim.amount;
+        let arbiter = lease.terms.arbiter.clone();
+        let mut record = Self::get_arbiter_record(env.clone(), arbiter.clone());
+        record.cases += 1;
+        record.claimed += claim.amount;
+        record.to_landlord += to_landlord;
+        keep_persistent(&env, &DataKey::ArbiterRecord(arbiter), &record);
         settle(&env, &cfg, id, &mut lease, to_landlord, forfeit);
         save(&env, id, &lease);
     }
@@ -784,7 +816,46 @@ impl LeaseVault {
         .publish(&env);
     }
 
+    /// Extends the storage life of a lease and its records. Callable by
+    /// anyone (the coordinator does it), so a long lease with no activity is
+    /// never archived between two payments.
+    pub fn bump(env: Env, id: u64) {
+        bump_instance(&env);
+        let lease = load(&env, id);
+        save(&env, id, &lease);
+        for key in [
+            DataKey::Claim(id),
+            DataKey::YieldProposal(id),
+            DataKey::Ratings(id),
+            DataKey::BufferLocked(id),
+        ] {
+            if env.storage().persistent().has(&key) {
+                env.storage()
+                    .persistent()
+                    .extend_ttl(&key, TTL_THRESHOLD, TTL_EXTEND_TO);
+            }
+        }
+    }
+
     // ── Views ───────────────────────────────────────────────────────────
+
+    /// Decisions made by an arbiter: number of cases, total claimed, total
+    /// awarded to landlords.
+    pub fn get_arbiter_record(env: Env, who: Address) -> ArbiterRecord {
+        env.storage()
+            .persistent()
+            .get(&DataKey::ArbiterRecord(who))
+            .unwrap_or_default()
+    }
+
+    /// Most a landlord can claim for damage right now: the guarantee minus the
+    /// months already taken from it, never the tenant's buffer or yield share.
+    pub fn max_claim(env: Env, id: u64) -> i128 {
+        let cfg = config(&env);
+        let lease = load(&env, id);
+        let value = lease.liquid + blend_value(&env, &cfg, &lease);
+        landlord_part(&lease).min(value).max(0)
+    }
 
     pub fn get_yield_proposal(env: Env, id: u64) -> Option<YieldProposal> {
         proposal(&env, id)
@@ -929,6 +1000,16 @@ fn drop_proposal(env: &Env, cfg: &Config, id: u64, lease: &Lease) {
             .remove(&DataKey::YieldProposal(id));
         YieldCancelled { id, refunded }.publish(env);
     }
+}
+
+/// The landlord's part of the guarantee: the deposit minus the months already
+/// taken from it, bounded by what the contract holds.
+fn damage_cap(lease: &Lease) -> i128 {
+    landlord_part(lease).max(0).min(lease.liquid)
+}
+
+fn landlord_part(lease: &Lease) -> i128 {
+    lease.terms.deposit - lease.terms.rent * lease.months_unpaid as i128
 }
 
 fn require_status(env: &Env, lease: &Lease, status: Status) {

@@ -1,4 +1,4 @@
-use soroban_sdk::{contracterror, contracttype, Address, BytesN};
+use soroban_sdk::{contracterror, contracttype, Address, BytesN, Vec};
 
 #[contracttype]
 #[derive(Clone)]
@@ -17,6 +17,8 @@ pub enum DataKey {
     RatedBy(Address, Address),
     /// The tenant's yield buffer is already in the contract for this lease.
     BufferLocked(u64),
+    /// Track record of an arbiter's decisions.
+    ArbiterRecord(Address),
 }
 
 /// Set once by the constructor. The pool cannot be changed afterwards:
@@ -40,6 +42,17 @@ pub struct Config {
     /// ... and held at least this guarantee. Below either, faking a good
     /// reputation with a second wallet would cost nothing.
     pub min_rated_deposit: i128,
+    /// Every lease window (move-in, claim, response, arbitration) and the
+    /// rental period must last at least this long, so no lease can leave the
+    /// tenant no time to answer (demo deployments use seconds) ...
+    pub min_window: u64,
+    /// ... and at most this long, so no window can lock a guarantee forever.
+    pub max_window: u64,
+    /// Arbiters a lease may name, fixed at deploy: a landlord cannot appoint
+    /// a second wallet of their own to decide disputes. Empty means open
+    /// (testnet demo, where each browser creates its own arbiter wallet);
+    /// every arbiter's decisions are public either way (`get_arbiter_record`).
+    pub arbiters: Vec<Address>,
 }
 
 /// Fixed by the landlord at creation and accepted by the tenant when funding.
@@ -177,6 +190,18 @@ pub struct Reputation {
     pub lease_seconds: u64,
 }
 
+/// Every decision an arbiter made, so a tenant can see before funding whether
+/// the arbiter named in a lease tends to side with landlords.
+#[contracttype]
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct ArbiterRecord {
+    pub cases: u32,
+    /// Sum of the disputed claims the arbiter decided.
+    pub claimed: i128,
+    /// Sum of what the arbiter awarded to landlords out of those claims.
+    pub to_landlord: i128,
+}
+
 #[contracterror]
 #[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
 #[repr(u32)]
@@ -195,4 +220,5 @@ pub enum Error {
     AlreadyConfirmed = 12,
     AlreadyRated = 13,
     InvalidScore = 14,
+    UnknownArbiter = 15,
 }

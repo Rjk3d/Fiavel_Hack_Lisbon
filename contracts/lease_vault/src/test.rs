@@ -20,6 +20,9 @@ const T0: u64 = 1_000;
 /// Rating thresholds of the fixture: the 3-minute, 1,300 USDC test lease counts.
 const MIN_RATED_DURATION: u64 = 180;
 const MIN_RATED_DEPOSIT: i128 = 100 * U;
+/// Shortest and longest lease window accepted by this deployment.
+const MIN_WINDOW: u64 = 30;
+const MAX_WINDOW: u64 = 1_000;
 
 /// Contract functions panic with a typed error; clients see it as this.
 fn err(e: Error) -> soroban_sdk::Error {
@@ -191,6 +194,7 @@ fn setup() -> Setup {
     let token_id = sac_contract.address();
     let pool_id = env.register(MockPool, (token_id.clone(),));
     let fund = Address::generate(&env);
+    let arbiter = Address::generate(&env);
     let vault_id = env.register(
         LeaseVault,
         (
@@ -200,6 +204,9 @@ fn setup() -> Setup {
             BOND,
             MIN_RATED_DURATION,
             MIN_RATED_DEPOSIT,
+            MIN_WINDOW,
+            MAX_WINDOW,
+            soroban_sdk::vec![&env, arbiter.clone()],
         ),
     );
 
@@ -210,7 +217,7 @@ fn setup() -> Setup {
         pool: MockPoolClient::new(&env, &pool_id),
         landlord: Address::generate(&env),
         tenant: Address::generate(&env),
-        arbiter: Address::generate(&env),
+        arbiter,
         fund,
         stranger: Address::generate(&env),
         env,
@@ -1048,4 +1055,125 @@ fn the_tenant_buffer_is_never_locked_twice() {
     let lease = s.vault.get_lease(&id);
     assert_eq!(lease.liquid + lease.placed, DEPOSIT + BUFFER);
     assert_eq!(s.vault.guarantee_value(&id), DEPOSIT + BUFFER);
+}
+
+// ── v4: bounded terms, approved arbiters, damage cap, storage bump ──────
+
+#[test]
+fn lease_windows_must_leave_the_tenant_time_and_cannot_lock_forever() {
+    let s = setup();
+    let bad = |f: &dyn Fn(&mut Terms)| {
+        let mut t = s.terms(false);
+        f(&mut t);
+        s.vault.try_create_lease(&s.landlord, &t)
+    };
+    // No time to answer a claim: the trap that would let a landlord take everything.
+    assert_eq!(bad(&|t| t.response_window = 0), Err(Ok(err(Error::InvalidTerms))));
+    assert_eq!(bad(&|t| t.response_window = MIN_WINDOW - 1), Err(Ok(err(Error::InvalidTerms))));
+    assert_eq!(bad(&|t| t.arbitration_window = 1), Err(Ok(err(Error::InvalidTerms))));
+    assert_eq!(bad(&|t| t.move_in_window = 1), Err(Ok(err(Error::InvalidTerms))));
+    assert_eq!(bad(&|t| t.period = 1), Err(Ok(err(Error::InvalidTerms))));
+    // A claim window that would freeze the guarantee.
+    assert_eq!(bad(&|t| t.claim_window = MAX_WINDOW + 1), Err(Ok(err(Error::InvalidTerms))));
+    assert_eq!(bad(&|t| t.grace = MAX_WINDOW + 1), Err(Ok(err(Error::InvalidTerms))));
+    // The bounds themselves are accepted.
+    assert!(bad(&|t| {
+        t.response_window = MIN_WINDOW;
+        t.claim_window = MAX_WINDOW;
+    })
+    .is_ok());
+}
+
+#[test]
+fn only_an_approved_arbiter_can_be_named() {
+    let s = setup();
+    let mut t = s.terms(false);
+    t.arbiter = s.stranger.clone();
+    assert_eq!(s.vault.try_create_lease(&s.landlord, &t), Err(Ok(err(Error::UnknownArbiter))));
+    assert_eq!(s.vault.get_config().arbiters, soroban_sdk::vec![&s.env, s.arbiter.clone()]);
+}
+
+#[test]
+fn an_empty_arbiter_list_leaves_the_choice_open() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let token = env.register_stellar_asset_contract_v2(Address::generate(&env)).address();
+    let pool = env.register(MockPool, (token.clone(),));
+    let open = LeaseVaultClient::new(
+        &env,
+        &env.register(
+            LeaseVault,
+            (
+                token,
+                pool,
+                Address::generate(&env),
+                BOND,
+                MIN_RATED_DURATION,
+                MIN_RATED_DEPOSIT,
+                MIN_WINDOW,
+                MAX_WINDOW,
+                Vec::<Address>::new(&env),
+            ),
+        ),
+    );
+    let s = setup();
+    let mut t = s.terms(false);
+    t.arbiter = Address::generate(&env);
+    assert!(open.try_create_lease(&Address::generate(&env), &t).is_ok());
+}
+
+#[test]
+fn arbiter_decisions_are_on_record() {
+    let s = setup();
+    let id = s.ended_lease(false);
+    s.vault.claim_damage(&id, &(200 * U), &s.hash(9));
+    s.vault.respond(&id, &(50 * U));
+    s.vault.resolve(&id, &(150 * U));
+    assert_eq!(
+        s.vault.get_arbiter_record(&s.arbiter),
+        ArbiterRecord { cases: 1, claimed: 200 * U, to_landlord: 150 * U }
+    );
+    assert_eq!(s.vault.get_arbiter_record(&s.stranger), ArbiterRecord::default());
+}
+
+#[test]
+fn a_damage_claim_cannot_reach_the_tenant_buffer() {
+    let s = setup();
+    let id = s.ended_lease(true);
+    assert_eq!(s.vault.max_claim(&id), DEPOSIT);
+    assert_eq!(
+        s.vault.try_claim_damage(&id, &(DEPOSIT + 1), &s.hash(9)),
+        Err(Ok(err(Error::InvalidAmount)))
+    );
+    let tenant_before = s.bal(&s.tenant);
+    s.vault.claim_damage(&id, &DEPOSIT, &s.hash(9));
+    // Even with the whole guarantee claimed, the buffer goes back at once.
+    assert_eq!(s.bal(&s.tenant), tenant_before + BUFFER);
+}
+
+#[test]
+fn months_taken_from_the_guarantee_lower_the_damage_cap() {
+    let s = setup();
+    let id = s.active_lease(false);
+    s.vault.pay_rent(&id);
+    // Month 3 is never paid: it is taken from the guarantee.
+    s.at(T0 + 180);
+    s.vault.end_lease(&id, &s.landlord, &None);
+    s.at(T0 + 191);
+    s.vault.claim_unpaid(&id);
+    assert_eq!(s.vault.max_claim(&id), DEPOSIT - RENT);
+    assert_eq!(
+        s.vault.try_claim_damage(&id, &(DEPOSIT - RENT + 1), &s.hash(9)),
+        Err(Ok(err(Error::InvalidAmount)))
+    );
+    s.vault.claim_damage(&id, &(DEPOSIT - RENT), &s.hash(9));
+}
+
+#[test]
+fn anyone_can_keep_a_lease_alive() {
+    let s = setup();
+    let id = s.active_lease(true);
+    s.vault.bump(&id);
+    assert_eq!(s.vault.get_lease(&id).status, Status::Active);
+    assert_eq!(s.vault.try_bump(&99), Err(Ok(err(Error::LeaseNotFound))));
 }

@@ -51,6 +51,25 @@ async function call(id: bigint, fn: Action["fn"]): Promise<Run> {
   }
 }
 
+// Storage entries live 7 days unless extended: the coordinator extends every open
+// lease once a day, so a long lease with no activity is never archived (v4 `bump`).
+const BUMP_EVERY_MS = 24 * 3600 * 1000;
+const lastBump = new Map<string, number>();
+const OPEN = new Set(["Created", "Funded", "Active", "Ended", "Claimed", "Disputed"]);
+
+async function keepAlive(id: bigint, status: string) {
+  const key = id.toString();
+  if (!OPEN.has(status) || Date.now() - (lastBump.get(key) ?? 0) < BUMP_EVERY_MS) return;
+  lastBump.set(key, Date.now());
+  try {
+    const tx = await (coordinator().client as unknown as Record<string, (a: unknown) => Promise<any>>).bump({ id });
+    await tx.signAndSend();
+    log({ lease: id, fn: "bump", ok: true });
+  } catch (e) {
+    log({ lease: id, fn: "bump", ok: false, error: contractError(String(e)) });
+  }
+}
+
 /** One pass over all leases. Returns what was attempted. */
 export async function tick(only?: bigint[]): Promise<Run[]> {
   const count = await leaseCount();
@@ -61,6 +80,7 @@ export async function tick(only?: bigint[]): Promise<Run[]> {
     for (const duty of coordinatorDuties(s)) {
       runs.push(await call(id, duty.fn));
     }
+    if (s.v4) await keepAlive(id, s.lease.status.tag);
   }
   return runs;
 }

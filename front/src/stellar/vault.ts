@@ -1,5 +1,5 @@
 import { Client, Errors, contract, rpc, scValToNative, type Claim, type Lease } from 'lease-vault-client'
-import type { Snapshot } from '@agents/rules'
+import type { ArbiterRecord, Snapshot } from '@agents/rules'
 import { NETWORK } from './config'
 import type { Wallet } from './wallets'
 
@@ -26,6 +26,11 @@ export function signerFor(wallet: Wallet): Client {
   })
 }
 
+/** Cheap health check of the RPC: the latest ledger, or a thrown error. */
+export async function ping(): Promise<number> {
+  return (await server.getLatestLedger()).sequence
+}
+
 export async function leaseCount(): Promise<number> {
   return Number((await reader.lease_count()).result)
 }
@@ -42,7 +47,27 @@ export async function snapshotOf(id: bigint, lease?: Lease): Promise<Snapshot> {
     reader.guarantee_value({ id }).then((t) => t.result),
     reader.blend_at_risk({ id }).then((t) => t.result),
   ])
-  return { id, lease: l, claim, now: Math.floor(Date.now() / 1000), guaranteeValue: value, blendAtRisk: risk, ...(await v2State(id)) }
+  const [v2, v4] = await Promise.all([v2State(id), isV4(id)])
+  return { id, lease: l, claim, now: Math.floor(Date.now() / 1000), guaranteeValue: value, blendAtRisk: risk, ...v2, v4 }
+}
+
+/** LeaseVault v4 answers `max_claim` (claims capped at the guarantee, bounded windows). */
+async function isV4(id: bigint): Promise<boolean> {
+  try {
+    await reader.max_claim({ id })
+    return true
+  } catch {
+    return false
+  }
+}
+
+/** An arbiter's decisions so far (v4), or null when the deployment cannot tell. */
+export async function arbiterRecordOf(address: string): Promise<ArbiterRecord | null> {
+  try {
+    return (await reader.get_arbiter_record({ who: address })).result
+  } catch {
+    return null
+  }
 }
 
 /**

@@ -1,5 +1,7 @@
 # Fiável — Plan de features (v3)
 
+> Statuts mis à jour le 25/10/2026 d'après le code de `main` et de la branche `audit-p0`.
+
 Track : **Genesis + Stellar Composed**. Mis à jour à partir du debrief du 25/10/2026.
 
 ## Ce qui change par rapport au debrief
@@ -70,30 +72,30 @@ Argument jury : « Nos agents ne peuvent pas halluciner : chaque message et chaq
 | ID | Feature | Priorité | Qui | Statut |
 |---|---|---|---|---|
 | B1 | Smart accounts passkey (OpenZeppelin smart-account-kit) pour les deux rôles | Must | Dev B | À faire |
-| B2 | Bouton « USDC de test » pour alimenter les comptes | Must | Dev B | À faire |
+| B2 | Bouton « USDC de test » pour alimenter les comptes | Must | Dev B | Fait (bouton « Get test funds ») |
 | B3 | Wallet de l'agent coordinateur (CLI Stellar), frais seulement | Must | C | Fait |
 | B4 | Frais sponsorisés : pas besoin d'XLM | Should | Dev B | À faire |
-| **B5** | **Politique OZ sur le smart account : l'agent du propriétaire ne peut appeler que `claim_unpaid`** | **Must** | Dev A | À faire |
+| **B5** | **Politique OZ sur le smart account : l'agent du propriétaire ne peut appeler que `claim_unpaid`** | **Must** | Dev A | Remplacé : `claim_unpaid` est public et ne paie que le bailleur, plus besoin de politique |
 | B6 | Retrait vers la banque via un anchor SEP-24 de test | Could | Dev B | À faire |
 
 ## C. App web (front Vite, branche `front`) — Dev B
 
 | ID | Feature | Priorité | Statut |
 |---|---|---|---|
-| C1 | Onboarding : choix du rôle, compte Face ID | Must | À faire |
-| C2 | Propriétaire : formulaire de bail (option Blend comprise) + lien d'invitation | Must | À faire |
-| C3 | Locataire : conditions, acceptation, financement | Must | À faire |
-| C4 | Timeline du bail en étapes | Must | À faire |
-| C5 | Carte « Votre garantie » avec solde lu on-chain | Must | À faire |
-| C6 | Paiement du loyer + historique | Must | À faire |
-| C7 | Réclamation (propriétaire) et réponse (locataire) | Must | À faire |
-| C8 | Lien Stellar Expert sur chaque action | Must | À faire |
-| C9 | Mode démo : 1 mois = 1 minute, compte à rebours visible | Must | À faire |
-| C10 | Interface en anglais (langue par défaut pour le jury) | Must | À faire |
-| C11 | Manifest PWA + icônes | Must | À faire |
-| C12 | Upload des photos d'état des lieux, hash calculé dans le navigateur | Should | À faire |
-| C13 | Écran d'arbitrage | Should | À faire |
-| C14 | Écran rendement : consentement, solde Blend réel, projection 12 mois et 30 ans | Should | À faire |
+| C1 | Onboarding : choix du rôle, compte Face ID | Must | Partiel : choix du rôle et connexion facultative faits, Face ID à faire |
+| C2 | Propriétaire : formulaire de bail (option Blend comprise) + lien d'invitation | Must | Fait |
+| C3 | Locataire : conditions, acceptation, financement | Must | Fait (conditions complètes et alertes de risque) |
+| C4 | Timeline du bail en étapes | Must | Fait |
+| C5 | Carte « Votre garantie » avec solde lu on-chain | Must | Fait |
+| C6 | Paiement du loyer + historique | Must | Fait |
+| C7 | Réclamation (propriétaire) et réponse (locataire) | Must | Fait |
+| C8 | Lien Stellar Expert sur chaque action | Must | Fait |
+| C9 | Mode démo : 1 mois = 1 minute, compte à rebours visible | Must | Fait |
+| C10 | Interface en anglais (langue par défaut pour le jury) | Must | Fait (anglais par défaut, français disponible) |
+| C11 | Manifest PWA + icônes | Must | Fait |
+| C12 | Upload des photos d'état des lieux, hash calculé dans le navigateur | Should | Fait |
+| C13 | Écran d'arbitrage | Should | Fait |
+| C14 | Écran rendement : consentement, solde Blend réel, projection 12 mois et 30 ans | Should | Fait |
 | C15 | Service worker hors ligne | Could | À faire |
 
 ## D. Agents déterministes — C
@@ -106,12 +108,12 @@ Argument jury : « Nos agents ne peuvent pas halluciner : chaque message et chaq
 | D4 | Outil `explain_lease_rule` : un modèle par règle, rempli avec les valeurs on-chain | Must | Fait |
 | D5 | Outil `request_contract_action` : transaction non signée, signée par l'utilisateur | Must | Fait |
 | D6 | Garde-fous : rôle, bail et montant vérifiés avant de proposer une action | Must | Fait |
-| D7 | Tenant Guardian : panneau d'assistant côté locataire (questions et actions guidées) | Must | Moteur prêt, UI à faire |
+| D7 | Tenant Guardian : panneau d'assistant côté locataire (questions et actions guidées) | Must | Fait |
 | D8 | Lease Coordinator : boucle qui appelle les fonctions publiques à l'expiration des délais, et `exit_blend` si besoin | Must | Fait |
 | D9 | Scène de refus « saisis la caution maintenant » : explication + appel rejeté par le contrat | Must | Fait (démo testnet) |
-| D10 | Landlord Assistant : même moteur, règles côté propriétaire | Should | Moteur prêt, UI à faire |
+| D10 | Landlord Assistant : même moteur, règles côté propriétaire | Should | Fait |
 | D11 | Outil `prepare_claim` : réclamation avec preuves | Should | À faire |
-| D12 | Journal visible des actions des agents | Should | Journal coordinateur fait, UI à faire |
+| D12 | Journal visible des actions des agents | Should | Partiel : historique on-chain dans l'app, journal du coordinateur en fichier |
 | D13 | Rappels proactifs | Could | À faire |
 
 ## E. Preuves et soumission — C
@@ -121,12 +123,12 @@ Argument jury : « Nos agents ne peuvent pas halluciner : chaque message et chaq
 | E9 | Préflight : Rust + CLI Stellar, contrat « hello world » sur testnet | Must | **Fait** |
 | E1 | 5 interviews + comptage d'annonces Idealista/OLX | Must | À faire |
 | E2 | README : problème, setup, variables, démo, travail antérieur, usage de l'IA | Must | En cours |
-| E3 | Schéma d'architecture + ID des contrats (LeaseVault, pool Blend, politique OZ) | Must | En cours (README) |
+| E3 | Schéma d'architecture + ID des contrats (LeaseVault, pool Blend, politique OZ) | Must | Fait (README) |
 | E4 | Liens des transactions testnet (financement, dépôt Blend, impayé, refus, libération) | Must | Fait (démo testnet) |
 | E5 | Vidéo de 2 à 4 min | Must | À faire |
 | E6 | Deck PDF (dont slides rendement 30 ans et vision obligations tokenisées) | Must | À faire |
 | E7 | Journal des prompts (IA utilisée pour coder) | Must | À faire |
-| E8 | Clé secrète du coordinateur hors du repo | Must | À faire |
+| E8 | Clé secrète du coordinateur hors du repo | Must | Fait (clés en variables d'environnement ou `stellar keys`) |
 
 ## Points de contrôle
 
