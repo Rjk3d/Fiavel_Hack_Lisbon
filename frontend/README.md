@@ -47,3 +47,17 @@ Only the selected demo role persists in browser storage. Payment simulations and
 Implement adapters for authenticated backend records, wallet authorization, Soroban reads/writes and verified transaction state. Replace the deterministic assistant through `AssistantService`. Add real evidence uploads, final contract-specific deadlines and permissions, production authentication and authorization, public reviews, human arbitration, and end-to-end browser tests. The prototype deliberately does not invent lease release deadlines or execute transfers. Deep-link hosting must serve `index.html` for application routes.
 
 Validation: production build, ESLint, and domain assertions are available above. Desktop/mobile CSS is implemented; visual browser QA must still be performed in a browser-capable environment.
+
+## Team login
+
+`/app/*` requires a sign-in at `/login`; the landing page stays public. Sessions last 8 hours (tab session), and 5 wrong attempts lock the form for 30 seconds.
+
+The password is not in the repository: only its PBKDF2-SHA256 hash (`src/lib/auth.ts`). To change it:
+
+```sh
+node scripts/hash-password.mjs "<new password>"   # prints VITE_ADMIN_SALT / VITE_ADMIN_HASH / VITE_ADMIN_ITERATIONS
+```
+
+Put the output in `frontend/.env.local` (git-ignored), optionally with `VITE_ADMIN_USER`, then rebuild.
+
+This is a client-side gate for demos. A static site cannot enforce real access control: protect real data on a server.
