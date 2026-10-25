@@ -10,6 +10,7 @@ import { InvestCard } from '../../components/live/invest'
 import { TermsReview } from '../../components/live/TermsReview'
 import { PartiesCard } from '../../components/live/reputation'
 import { LeaseChat } from '../../components/live/LeaseChat'
+import { InventoryCard } from '../../components/live/InventoryCard'
 import { MONTH_PILL, months, statusOf, toActivity } from '../../components/live/lease-view'
 import { ActivityList } from '../../components/dashboard/ActivityList'
 import { AIInsightCard } from '../../components/ai/AIInsightCard'
@@ -291,6 +292,8 @@ function LeaseDetailBody({ view }: { view: LeaseView }) {
         <InvestCard view={view} />
         <PartiesCard view={view} />
       </div>
+
+      <InventoryCard view={view} />
 
       <LeaseChat view={view} />
 

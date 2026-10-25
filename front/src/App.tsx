@@ -18,6 +18,8 @@ const LivePayments = page(() => import('./pages/live/MoneyPages'), 'LivePayments
 const LiveDeposit = page(() => import('./pages/live/MoneyPages'), 'LiveDeposit')
 const LiveActivity = page(() => import('./pages/live/MoneyPages'), 'LiveActivity')
 const LiveAssistant = page(() => import('./pages/live/AssistantPage'), 'LiveAssistant')
+const InventoryEditorPage = page(() => import('./pages/live/InventoryPages'), 'InventoryEditorPage')
+const InventoryComparePage = page(() => import('./pages/live/InventoryPages'), 'InventoryComparePage')
 
 const loading = (
   <div className="mx-auto max-w-[1180px] p-6">
@@ -43,6 +45,8 @@ export default function App() {
             <Route index element={<LiveOverview />} />
             <Route path="lease" element={<LiveLeases />} />
             <Route path="leases/:id" element={<LiveLeaseDetailPage />} />
+            <Route path="leases/:id/inventory/compare" element={<InventoryComparePage />} />
+            <Route path="leases/:id/inventory/:kind" element={<InventoryEditorPage />} />
             <Route path="join/:id" element={<JoinPage />} />
             <Route path="payments" element={<LivePayments />} />
             <Route path="deposit" element={<LiveDeposit />} />

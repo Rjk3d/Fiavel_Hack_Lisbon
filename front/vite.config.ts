@@ -2,31 +2,37 @@ import { fileURLToPath, URL } from 'node:url'
 import { defineConfig, loadEnv, type Connect, type Plugin } from 'vite'
 import react from '@vitejs/plugin-react'
 import { assist, clientFromEnv, STATUS } from './server/assistant'
+import { inspect } from './server/inventory'
 
 const here = (p: string) => fileURLToPath(new URL(p, import.meta.url))
 
-/** Serves /api/assistant in dev and preview, like the Vercel function does in production. */
-function assistantApi(env: Record<string, string>): Plugin {
+/** Serves the AI routes in dev and preview, like the Vercel functions do in production. */
+function aiApi(env: Record<string, string>): Plugin {
   const client = clientFromEnv(env)
+  const routes: Record<string, (body: unknown) => Promise<{ ok: boolean; error?: string }>> = {
+    '/api/assistant': (body) => assist(body, client),
+    '/api/inventory': (body) => inspect(body, client),
+  }
   const route: Connect.NextHandleFunction = (req, res, next) => {
-    if (req.url !== '/api/assistant' || req.method !== 'POST') return next()
-    let raw = ''
-    req.on('data', (c: Buffer) => (raw += c))
+    const handle = routes[req.url ?? '']
+    if (!handle || req.method !== 'POST') return next()
+    const chunks: Buffer[] = []
+    req.on('data', (c: Buffer) => chunks.push(c))
     req.on('end', async () => {
       let body: unknown = null
       try {
-        body = JSON.parse(raw)
+        body = JSON.parse(Buffer.concat(chunks).toString('utf8'))
       } catch {
         /* invalid below */
       }
-      const out = await assist(body, client)
-      res.statusCode = out.ok ? 200 : STATUS[out.error]
+      const out = await handle(body)
+      res.statusCode = out.ok ? 200 : STATUS[out.error ?? 'invalid']
       res.setHeader('Content-Type', 'application/json')
       res.end(JSON.stringify(out))
     })
   }
   return {
-    name: 'fiavel-assistant-api',
+    name: 'fiavel-ai-api',
     configureServer: (server) => void server.middlewares.use(route),
     configurePreviewServer: (server) => void server.middlewares.use(route),
   }
@@ -34,7 +40,7 @@ function assistantApi(env: Record<string, string>): Plugin {
 
 export default defineConfig(({ mode }) => ({
   // ANTHROPIC_API_KEY from front/.env.local (or the shell); never exposed to the browser.
-  plugins: [react(), assistantApi({ ...loadEnv(mode, process.cwd(), ''), ...process.env } as Record<string, string>)],
+  plugins: [react(), aiApi({ ...loadEnv(mode, process.cwd(), ''), ...process.env } as Record<string, string>)],
   resolve: {
     alias: {
       // The agents' rule engine is shared with the app: the UI proposes exactly what the contract accepts.
