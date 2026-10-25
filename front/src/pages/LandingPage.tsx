@@ -261,7 +261,7 @@ function TwoWayTrust() {
         <SectionTitle
           eyebrow="Built into the contract"
           title="Trust that works both ways."
-          sub="Two features that no deposit scheme in Portugal offers today, both enforced on Stellar rather than promised in a PDF."
+          sub="Two features enforced by the contract on Stellar, not promised in a PDF."
         />
         <div className="mt-12 grid gap-5 lg:grid-cols-2">
           <article className="card p-6 sm:p-8">
