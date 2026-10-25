@@ -48,6 +48,13 @@ The contract IDs come from `../deployments/testnet.json`. `VITE_LEASE_VAULT_ID`,
 - `src/components/live/` — action panel and dialogs (one per contract function), cards, lease mappings, the
   deterministic assistant.
 - `api/blend-faucet.ts` + `vercel.json` — production relay for Blend's faucet (the dev server proxies it).
+- `src/stellar/chat.ts` + `src/components/live/LeaseChat.tsx` — tenant-landlord messages: encrypted on the device
+  (Stellar keys → X25519, HKDF per lease, XChaCha20-Poly1305), sent with `send_message`, thread hash recomputed and
+  checked against `get_thread`. Messages seen are kept in localStorage so they outlive the RPC's event window.
+- `server/assistant.ts` — AI language help for the chat (Claude via `@anthropic-ai/sdk`: translate, polish,
+  summarize). Served by `api/assistant.ts` on Vercel and by a Vite middleware in dev/preview. Needs `ANTHROPIC_API_KEY`
+  (Vercel env var or `front/.env.local`); without it the app says the AI is off. No tools, input limits, a per-IP
+  limit, and a code check that flags any number changed by a rewrite.
 
 ## Sign-in (optional)
 

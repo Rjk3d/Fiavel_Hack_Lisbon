@@ -1,8 +1,8 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { Suspense, useEffect, useRef, useState, type ReactNode } from 'react'
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
-import { Bell, ExternalLink, LogIn, LogOut, Menu, Wallet as WalletIcon, X } from 'lucide-react'
+import { Bell, ExternalLink, LogIn, LogOut, Menu, RefreshCw, Users, Wallet as WalletIcon, WifiOff, X } from 'lucide-react'
 import { NAV } from './nav'
-import { Avatar, Logo } from '../ui/misc'
+import { Avatar, Logo, Skeleton } from '../ui/misc'
 import { Pill } from '../ui/Pill'
 import { useLive, ROLE_LABEL, ROLE_PERSON } from '../../state/live'
 import { LiveRoleSwitcher, WalletCard, networkLine } from '../live/cards'
@@ -26,13 +26,93 @@ export function AppShell() {
       <div className="md:pl-[84px] lg:pl-[264px]">
         <TopBar onMenu={() => setDrawer(true)} />
         <main className="mx-auto w-full max-w-[1180px] px-4 pb-[calc(104px+env(safe-area-inset-bottom))] pt-5 sm:px-6 md:pb-12 lg:px-10 lg:pt-8">
+          <OfflineBanner />
+          <DemoModeNote />
           <ErrorBoundary resetKey={pathname}>
-            <Outlet />
+            <Suspense fallback={<Skeleton className="h-[420px]" />}>
+              <Outlet />
+            </Suspense>
           </ErrorBoundary>
         </main>
       </div>
       <BottomNav />
       {drawer && <MobileDrawer onClose={() => setDrawer(false)} />}
+    </div>
+  )
+}
+
+/** Live state of the network, so a slow or absent RPC never looks like an empty app. */
+function ConnectionPill() {
+  const { connection, ledger } = useLive()
+  const tone = connection === 'live' ? 'success' : connection === 'offline' ? 'danger' : 'neutral'
+  const text =
+    connection === 'live' ? `Stellar Testnet · ledger ${ledger?.toLocaleString('en-GB') ?? '…'}` : connection === 'offline' ? 'Testnet unreachable' : 'Connecting to Testnet…'
+  return (
+    <Pill tone={tone} className="hidden sm:inline-flex" dot>
+      <span role="status">{text}</span>
+    </Pill>
+  )
+}
+
+function OfflineBanner() {
+  const { connection, refresh } = useLive()
+  const [busy, setBusy] = useState(false)
+  if (connection !== 'offline') return null
+  return (
+    <div role="alert" className="mb-5 flex flex-col gap-3 rounded-xl2 border border-danger/25 bg-danger-tint px-4 py-3 sm:flex-row sm:items-center">
+      <WifiOff size={18} className="shrink-0 text-danger" />
+      <p className="flex-1 text-[14px] leading-[20px]">
+        <span className="font-semibold text-danger">Stellar Testnet does not answer.</span>{' '}
+        <span className="text-ink-muted">Balances and leases below may be out of date. Nothing is lost: everything lives on-chain. Retrying every 10 s.</span>
+      </p>
+      <button
+        onClick={async () => {
+          setBusy(true)
+          await refresh()
+          setBusy(false)
+        }}
+        disabled={busy}
+        className="inline-flex h-9 items-center justify-center gap-1.5 rounded-full border border-danger/30 bg-white px-4 text-[13px] font-semibold text-danger transition hover:bg-danger-tint disabled:opacity-60"
+      >
+        <RefreshCw size={14} className={busy ? 'animate-spin' : ''} /> Retry now
+      </button>
+    </div>
+  )
+}
+
+const DEMO_NOTE_KEY = 'fiavel.demoNoteClosed'
+
+/** Explains once that one browser plays the three parties, so the switcher is not mistaken for the product. */
+function DemoModeNote() {
+  const [closed, setClosed] = useState(() => {
+    try {
+      return localStorage.getItem(DEMO_NOTE_KEY) === '1'
+    } catch {
+      return false
+    }
+  })
+  if (closed) return null
+  return (
+    <div className="mb-5 flex items-start gap-3 rounded-xl2 border border-line bg-white px-4 py-3 text-[13px] leading-[19px]">
+      <Users size={17} className="mt-0.5 shrink-0 text-brand" />
+      <p className="flex-1 text-ink-muted">
+        <span className="font-semibold text-ink">Demo mode:</span> this browser holds three test wallets (tenant, landlord, arbiter) so one person can play a
+        whole lease. Switch between them in the sidebar. In real use, each party signs from their own device.
+      </p>
+      <button
+        onClick={() => {
+          setClosed(true)
+          try {
+            localStorage.setItem(DEMO_NOTE_KEY, '1')
+          } catch {
+            /* stays closed for this visit */
+          }
+        }}
+        className="-m-1 grid h-8 w-8 shrink-0 place-items-center rounded-full text-ink-muted hover:bg-canvas hover:text-ink"
+        aria-label="Hide this note"
+      >
+        <X size={15} />
+      </button>
     </div>
   )
 }
@@ -95,9 +175,7 @@ function TopBar({ onMenu }: { onMenu: () => void }) {
         <Link to="/" className="md:hidden" aria-label="Fiável home">
           <Logo />
         </Link>
-        <Pill tone="brand" className="hidden sm:inline-flex" dot>
-          Stellar Testnet · live
-        </Pill>
+        <ConnectionPill />
         <div className="flex-1" />
         <div className="hidden sm:block lg:hidden">
           <LiveRoleSwitcher />

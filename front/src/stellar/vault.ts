@@ -1,5 +1,5 @@
 import { Client, Errors, contract, rpc, scValToNative, type Claim, type Lease } from 'lease-vault-client'
-import type { Snapshot } from '@agents/rules'
+import type { ArbiterRecord, Snapshot } from '@agents/rules'
 import { NETWORK } from './config'
 import type { Wallet } from './wallets'
 
@@ -26,6 +26,11 @@ export function signerFor(wallet: Wallet): Client {
   })
 }
 
+/** Cheap health check of the RPC: the latest ledger, or a thrown error. */
+export async function ping(): Promise<number> {
+  return (await server.getLatestLedger()).sequence
+}
+
 export async function leaseCount(): Promise<number> {
   return Number((await reader.lease_count()).result)
 }
@@ -42,7 +47,27 @@ export async function snapshotOf(id: bigint, lease?: Lease): Promise<Snapshot> {
     reader.guarantee_value({ id }).then((t) => t.result),
     reader.blend_at_risk({ id }).then((t) => t.result),
   ])
-  return { id, lease: l, claim, now: Math.floor(Date.now() / 1000), guaranteeValue: value, blendAtRisk: risk, ...(await v2State(id)) }
+  const [v2, v4] = await Promise.all([v2State(id), isV4(id)])
+  return { id, lease: l, claim, now: Math.floor(Date.now() / 1000), guaranteeValue: value, blendAtRisk: risk, ...v2, v4 }
+}
+
+/** LeaseVault v4 answers `max_claim` (claims capped at the guarantee, bounded windows). */
+async function isV4(id: bigint): Promise<boolean> {
+  try {
+    await reader.max_claim({ id })
+    return true
+  } catch {
+    return false
+  }
+}
+
+/** An arbiter's decisions so far (v4), or null when the deployment cannot tell. */
+export async function arbiterRecordOf(address: string): Promise<ArbiterRecord | null> {
+  try {
+    return (await reader.get_arbiter_record({ who: address })).result
+  } catch {
+    return null
+  }
 }
 
 /**
@@ -59,6 +84,16 @@ async function v2State(id: bigint): Promise<Pick<Snapshot, 'proposal' | 'ratings
     return { proposal, ratings, v2: true }
   } catch {
     return { v2: false }
+  }
+}
+
+/** Message count and thread hash of a lease, or null on a contract without messages. */
+export async function threadOf(id: bigint): Promise<{ count: number; hash: Uint8Array } | null> {
+  try {
+    const { result } = await reader.get_thread({ id })
+    return { count: Number(result.count), hash: new Uint8Array(result.hash) }
+  } catch {
+    return null
   }
 }
 
@@ -119,6 +154,8 @@ export interface ChainEvent {
   at: string
   tx: string
   data: Record<string, unknown>
+  /** Third topic when there is one: the sender of a message, the rater of a rating. */
+  actor?: string
 }
 
 /** Contract events, oldest first. The RPC keeps about a week of them. */
@@ -143,6 +180,7 @@ export async function contractEvents(): Promise<ChainEvent[]> {
       at: e.ledgerClosedAt,
       tx: e.txHash,
       data: (typeof value === 'object' && value !== null ? value : { value }) as Record<string, unknown>,
+      actor: e.topic[2] ? String(scValToNative(e.topic[2])) : undefined,
     }
   })
 }
@@ -172,6 +210,7 @@ const PLAIN: Record<string, string> = {
   InvalidScore: 'A rating is a whole number from 1 to 5.',
   ArbiterNotApproved: 'This arbiter is not an approved mediator. Pick one from the registry.',
   RegistryClosed: 'The mediator registry is curated: only its admin can approve a mediator.',
+  InvalidMessage: 'A message must be 1 to about 980 characters.',
 }
 
 export const plainError = (e: unknown) => {

@@ -4,11 +4,12 @@
 //   npm run explain -- <lease id> "<rule or question>"
 //   npm run history -- <lease id>
 //   npm run coordinator [-- --once]
+//   npm run risks -- <lease id>
 
 import { runLoop } from "./coordinator.js";
 import { explainLeaseRule, getLeaseStatus, getRentHistory } from "./tools.js";
-import { when, type Role } from "./rules.js";
-import { explorer } from "./chain.js";
+import { riskFlags, when, type Role } from "./rules.js";
+import { arbiterRecord, explorer, snapshot } from "./chain.js";
 
 const [cmd, ...rest] = process.argv.slice(2);
 
@@ -37,11 +38,18 @@ async function main() {
       }
       break;
     }
+    case "risks": {
+      const s = await snapshot(BigInt(rest[0] ?? 0));
+      const flags = riskFlags(s.lease, await arbiterRecord(s.lease.terms.arbiter));
+      if (!flags.length) console.log("No red flag in these terms.");
+      flags.forEach((f) => console.log(`${f.level === "danger" ? "✗" : "!"} ${f.text}`));
+      break;
+    }
     case "coordinator":
       await runLoop(rest.includes("--once"));
       break;
     default:
-      console.log("Commands: status <id> [role] | explain <id> <question> | history <id> | coordinator [--once]");
+      console.log("Commands: status <id> [role] | explain <id> <question> | history <id> | risks <id> | coordinator [--once]");
   }
 }
 

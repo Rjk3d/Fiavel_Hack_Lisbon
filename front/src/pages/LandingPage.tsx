@@ -149,7 +149,7 @@ function Hero() {
             </a>
           </div>
           <ul className="mt-10 flex flex-wrap gap-x-6 gap-y-3 text-[14px] text-ink-muted">
-            {['Deposit rules both sides can read', 'AI that explains, never decides', 'Built for Lisbon rentals'].map((t) => (
+            {['Deposit rules both sides can read', 'Agents that explain, never decide', 'Built for Lisbon rentals'].map((t) => (
               <li key={t} className="flex items-center gap-2">
                 <span className="grid h-5 w-5 place-items-center rounded-full bg-brand-tint text-brand">
                   <Check size={12} strokeWidth={3} />
@@ -313,9 +313,9 @@ function Agents() {
     <section className="bg-canvas py-20 sm:py-28">
       <div className="mx-auto max-w-[1200px] px-4 sm:px-6 lg:px-8">
         <SectionTitle
-          eyebrow="AI agents"
+          eyebrow="Rule-based agents"
           title="Two sides. One fairer rental experience."
-          sub="Each side gets its own assistant. They explain, summarise and prepare. The authorised rules — not the AI — control any movement of funds."
+          sub="Each side gets its own assistant. It runs on the lease rules, not a language model, so it cannot invent a clause. It explains and prepares; only the contract moves funds."
         />
         <div className="mt-12 grid gap-5 lg:grid-cols-2">
           <AgentCard
@@ -372,7 +372,7 @@ function AgentCard({ name, tagline, body, prompts, can, dark }: { name: string; 
 function Trust() {
   const flow = [
     { icon: <Handshake size={20} />, title: 'Human agreement', body: 'Tenant and landlord sign the terms.' },
-    { icon: <Bot size={20} />, title: 'AI assistance', body: 'Explains and prepares. Never decides.' },
+    { icon: <Bot size={20} />, title: 'Agent assistance', body: 'Explains from the rules and prepares. Never decides.' },
     { icon: <CalendarClock size={20} />, title: 'Verified rules', body: 'Dates, amounts and windows, checked.' },
     { icon: <Wallet size={20} />, title: 'Stellar transaction', body: 'Supported actions settle on-chain.' },
   ]
@@ -397,8 +397,8 @@ function Trust() {
           ))}
         </ol>
         <p className="mx-auto mt-8 max-w-[62ch] text-center text-[13px] leading-[20px] text-ink-muted">
-          Fiável is an early prototype running with demo data. It is not audited, not legally certified and not production-ready, and no real funds
-          are handled. Stellar integration targets Testnet only.
+          Fiável runs on Stellar Testnet with test assets: no real money moves. The contract has 44 unit tests but is not audited, not legally
+          certified and not production-ready.
         </p>
       </div>
     </section>
@@ -430,7 +430,7 @@ function Footer() {
       <div className="mx-auto grid max-w-[1200px] gap-10 px-4 py-12 sm:px-6 md:grid-cols-[1.4fr_1fr_1fr] lg:px-8">
         <div>
           <Logo />
-          <p className="mt-4 max-w-[34ch] text-[14px] leading-[22px] text-ink-muted">AI agents for fair rentals. Smart contracts for trust. Made in Lisbon for HackMeridian.</p>
+          <p className="mt-4 max-w-[34ch] text-[14px] leading-[22px] text-ink-muted">Fair rentals. Enforced by Stellar, explained by agents. Made in Lisbon for HackMeridian.</p>
         </div>
         <div>
           <p className="text-[13px] font-semibold">Product</p>
@@ -451,7 +451,7 @@ function Footer() {
               <Link to="/app" className="hover:text-ink">Tenant & landlord app</Link>
             </li>
             <li>
-              <Link to="/app/assistant" className="hover:text-ink">AI assistant</Link>
+              <Link to="/app/assistant" className="hover:text-ink">Assistant</Link>
             </li>
             <li>
               <Link to="/app/deposit" className="hover:text-ink">Protected deposit</Link>
@@ -461,8 +461,8 @@ function Footer() {
       </div>
       <div className="border-t border-line">
         <p className="mx-auto max-w-[1200px] px-4 py-6 text-[12px] leading-[18px] text-ink-muted sm:px-6 lg:px-8">
-          Testnet demo. All people, properties, payments and events are fictional. No real funds are held or transferred, and no Stellar transaction has
-          been submitted by this prototype.
+          Testnet app. The people in the demo are fictional and every transaction uses test assets on Stellar Testnet, never real funds. The phone
+          above is an illustration; the app shows live contract data.
         </p>
       </div>
     </footer>

@@ -19,6 +19,10 @@ pub enum DataKey {
     BufferLocked(u64),
     /// Approved mediators, in the order they joined.
     Arbiters,
+    /// Track record of an arbiter's decisions.
+    ArbiterRecord(Address),
+    /// Message thread between the two parties of a lease.
+    Thread(u64),
 }
 
 /// Set once by the constructor. The pool cannot be changed afterwards:
@@ -47,6 +51,12 @@ pub struct Config {
     /// Testnet only: anyone can join the registry by signing, so judges can
     /// play the mediator. On mainnet it is false and only `admin` approves.
     pub open_registry: bool,
+    /// Every lease window (move-in, claim, response, arbitration) and the
+    /// rental period must last at least this long, so no lease can leave the
+    /// tenant no time to answer (demo deployments use seconds) ...
+    pub min_window: u64,
+    /// ... and at most this long, so no window can lock a guarantee forever.
+    pub max_window: u64,
 }
 
 /// Fixed by the landlord at creation and accepted by the tenant when funding.
@@ -185,6 +195,29 @@ pub struct Reputation {
     pub lease_seconds: u64,
 }
 
+/// Every decision an arbiter made, so a tenant can see before funding whether
+/// the arbiter named in a lease tends to side with landlords.
+#[contracttype]
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct ArbiterRecord {
+    pub cases: u32,
+    /// Sum of the disputed claims the arbiter decided.
+    pub claimed: i128,
+    /// Sum of what the arbiter awarded to landlords out of those claims.
+    pub to_landlord: i128,
+}
+
+/// The message thread of a lease. Messages themselves are only in events,
+/// encrypted for the two parties; the contract keeps their number and a
+/// running hash, so nobody can drop or rewrite a message afterwards.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct Thread {
+    pub count: u32,
+    /// sha256(previous hash || sender || seq || payload), zero when empty.
+    pub hash: BytesN<32>,
+}
+
 #[contracterror]
 #[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
 #[repr(u32)]
@@ -207,4 +240,6 @@ pub enum Error {
     ArbiterNotApproved = 15,
     /// Self-registration is off: only the admin approves mediators.
     RegistryClosed = 16,
+    /// A message is empty or longer than 1,024 bytes.
+    InvalidMessage = 17,
 }

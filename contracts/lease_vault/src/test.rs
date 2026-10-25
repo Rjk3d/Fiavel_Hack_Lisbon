@@ -20,6 +20,9 @@ const T0: u64 = 1_000;
 /// Rating thresholds of the fixture: the 3-minute, 1,300 USDC test lease counts.
 const MIN_RATED_DURATION: u64 = 180;
 const MIN_RATED_DEPOSIT: i128 = 100 * U;
+/// Shortest and longest lease window accepted by this deployment.
+const MIN_WINDOW: u64 = 30;
+const MAX_WINDOW: u64 = 1_000;
 
 /// Contract functions panic with a typed error; clients see it as this.
 fn err(e: Error) -> soroban_sdk::Error {
@@ -210,6 +213,8 @@ fn setup_with(open_registry: bool) -> Setup {
             MIN_RATED_DEPOSIT,
             admin.clone(),
             open_registry,
+            MIN_WINDOW,
+            MAX_WINDOW,
             Vec::from_array(&env, [arbiter.clone()]),
         ),
     );
@@ -1167,4 +1172,164 @@ fn a_revoked_mediator_blocks_funding_of_a_pending_offer() {
         s.vault.try_fund(&id, &s.tenant, &false),
         Err(Ok(err(Error::ArbiterNotApproved)))
     );
+}
+
+// ── Bounded terms, arbiter records, damage cap, storage bump ──────
+
+#[test]
+fn lease_windows_must_leave_the_tenant_time_and_cannot_lock_forever() {
+    let s = setup();
+    let bad = |f: &dyn Fn(&mut Terms)| {
+        let mut t = s.terms(false);
+        f(&mut t);
+        s.vault.try_create_lease(&s.landlord, &t)
+    };
+    // No time to answer a claim: the trap that would let a landlord take everything.
+    assert_eq!(bad(&|t| t.response_window = 0), Err(Ok(err(Error::InvalidTerms))));
+    assert_eq!(bad(&|t| t.response_window = MIN_WINDOW - 1), Err(Ok(err(Error::InvalidTerms))));
+    assert_eq!(bad(&|t| t.arbitration_window = 1), Err(Ok(err(Error::InvalidTerms))));
+    assert_eq!(bad(&|t| t.move_in_window = 1), Err(Ok(err(Error::InvalidTerms))));
+    assert_eq!(bad(&|t| t.period = 1), Err(Ok(err(Error::InvalidTerms))));
+    // A claim window that would freeze the guarantee.
+    assert_eq!(bad(&|t| t.claim_window = MAX_WINDOW + 1), Err(Ok(err(Error::InvalidTerms))));
+    assert_eq!(bad(&|t| t.grace = MAX_WINDOW + 1), Err(Ok(err(Error::InvalidTerms))));
+    // The bounds themselves are accepted.
+    assert!(bad(&|t| {
+        t.response_window = MIN_WINDOW;
+        t.claim_window = MAX_WINDOW;
+    })
+    .is_ok());
+}
+
+#[test]
+fn arbiter_decisions_are_on_record() {
+    let s = setup();
+    let id = s.ended_lease(false);
+    s.vault.claim_damage(&id, &(200 * U), &s.hash(9));
+    s.vault.respond(&id, &(50 * U));
+    s.vault.resolve(&id, &(150 * U));
+    assert_eq!(
+        s.vault.get_arbiter_record(&s.arbiter),
+        ArbiterRecord { cases: 1, claimed: 200 * U, to_landlord: 150 * U }
+    );
+    assert_eq!(s.vault.get_arbiter_record(&s.stranger), ArbiterRecord::default());
+}
+
+#[test]
+fn a_damage_claim_cannot_reach_the_tenant_buffer() {
+    let s = setup();
+    let id = s.ended_lease(true);
+    assert_eq!(s.vault.max_claim(&id), DEPOSIT);
+    assert_eq!(
+        s.vault.try_claim_damage(&id, &(DEPOSIT + 1), &s.hash(9)),
+        Err(Ok(err(Error::InvalidAmount)))
+    );
+    let tenant_before = s.bal(&s.tenant);
+    s.vault.claim_damage(&id, &DEPOSIT, &s.hash(9));
+    // Even with the whole guarantee claimed, the buffer goes back at once.
+    assert_eq!(s.bal(&s.tenant), tenant_before + BUFFER);
+}
+
+#[test]
+fn months_taken_from_the_guarantee_lower_the_damage_cap() {
+    let s = setup();
+    let id = s.active_lease(false);
+    s.vault.pay_rent(&id);
+    // Month 3 is never paid: it is taken from the guarantee.
+    s.at(T0 + 180);
+    s.vault.end_lease(&id, &s.landlord, &None);
+    s.at(T0 + 191);
+    s.vault.claim_unpaid(&id);
+    assert_eq!(s.vault.max_claim(&id), DEPOSIT - RENT);
+    assert_eq!(
+        s.vault.try_claim_damage(&id, &(DEPOSIT - RENT + 1), &s.hash(9)),
+        Err(Ok(err(Error::InvalidAmount)))
+    );
+    s.vault.claim_damage(&id, &(DEPOSIT - RENT), &s.hash(9));
+}
+
+#[test]
+fn anyone_can_keep_a_lease_alive() {
+    let s = setup();
+    let id = s.active_lease(true);
+    s.vault.bump(&id);
+    assert_eq!(s.vault.get_lease(&id).status, Status::Active);
+    assert_eq!(s.vault.try_bump(&99), Err(Ok(err(Error::LeaseNotFound))));
+}
+
+// ── Messages ────────────────────────────────────────────────────────────
+
+fn msg(env: &Env, bytes: &[u8]) -> soroban_sdk::Bytes {
+    soroban_sdk::Bytes::from_slice(env, bytes)
+}
+
+#[test]
+fn parties_message_each_other_in_a_hash_chained_thread() {
+    let s = setup();
+    let id = s.active_lease(false);
+    let before = (s.bal(&s.tenant), s.bal(&s.landlord), s.vault.get_lease(&id));
+    assert_eq!(s.vault.get_thread(&id).count, 0);
+
+    let first = s.vault.send_message(&id, &s.tenant, &msg(&s.env, b"hello"));
+    let auths = s.env.auths();
+    assert_eq!(auths.len(), 1);
+    assert_eq!(auths[0].0, s.tenant);
+    let second = s.vault.send_message(&id, &s.landlord, &msg(&s.env, b"hi"));
+
+    let zero = BytesN::from_array(&s.env, &[0; 32]);
+    let h1 = thread_hash(&s.env, &zero, &s.tenant, 0, &msg(&s.env, b"hello"));
+    let h2 = thread_hash(&s.env, &h1, &s.landlord, 1, &msg(&s.env, b"hi"));
+    assert_eq!(first, Thread { count: 1, hash: h1 });
+    assert_eq!(second, Thread { count: 2, hash: h2.clone() });
+    assert_eq!(s.vault.get_thread(&id), second);
+    // A message moves no money and changes nothing on the lease.
+    assert_eq!((s.bal(&s.tenant), s.bal(&s.landlord), s.vault.get_lease(&id)), before);
+    // The same text from the other party gives another hash.
+    assert_ne!(
+        thread_hash(&s.env, &zero, &s.landlord, 0, &msg(&s.env, b"hello")),
+        thread_hash(&s.env, &zero, &s.tenant, 0, &msg(&s.env, b"hello"))
+    );
+    s.vault.bump(&id);
+    assert_eq!(s.vault.get_thread(&id).hash, h2);
+}
+
+#[test]
+fn only_the_two_parties_can_message_once_the_tenant_is_known() {
+    let s = setup();
+    let open = s.vault.create_lease(&s.landlord, &s.terms(false));
+    assert_eq!(
+        s.vault.try_send_message(&open, &s.landlord, &msg(&s.env, b"x")),
+        Err(Ok(err(Error::WrongStatus)))
+    );
+    let id = s.active_lease(false);
+    for who in [&s.stranger, &s.arbiter] {
+        assert_eq!(
+            s.vault.try_send_message(&id, who, &msg(&s.env, b"x")),
+            Err(Ok(err(Error::NotAParty)))
+        );
+    }
+    assert_eq!(
+        s.vault.try_send_message(&id, &s.tenant, &msg(&s.env, b"")),
+        Err(Ok(err(Error::InvalidMessage)))
+    );
+    assert_eq!(
+        s.vault.try_send_message(&id, &s.tenant, &msg(&s.env, &[7; 1_025])),
+        Err(Ok(err(Error::InvalidMessage)))
+    );
+    assert_eq!(s.vault.send_message(&id, &s.tenant, &msg(&s.env, &[7; 1_024])).count, 1);
+    // Still possible after the lease, e.g. to settle a damage claim.
+    let closed = s.closed_lease(false);
+    assert_eq!(s.vault.send_message(&closed, &s.landlord, &msg(&s.env, b"thanks")).count, 1);
+}
+
+/// Same vector as front/src/chat/thread.test.ts: the app and the contract
+/// must chain messages identically.
+#[test]
+fn thread_hash_matches_the_app() {
+    let env = Env::default();
+    let from = Address::from_str(&env, "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF");
+    let zero = BytesN::from_array(&env, &[0; 32]);
+    let h = thread_hash(&env, &zero, &from, 0, &msg(&env, &[1, 2, 3]));
+    let hex: std::string::String = h.to_array().iter().map(|b| std::format!("{b:02x}")).collect();
+    assert_eq!(hex, "e4cefdd803d0695ce1673234549e0dd18b54b9c86318bc2f1fc08d7d724942ff");
 }

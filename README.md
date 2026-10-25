@@ -1,5 +1,7 @@
 # Fiável
 
+[![CI](https://github.com/Rjk3d/fiavel_hack_lisbon/actions/workflows/ci.yml/badge.svg)](https://github.com/Rjk3d/fiavel_hack_lisbon/actions/workflows/ci.yml)
+
 > Fair rentals. Enforced by Stellar, explained by agents.
 
 Rental escrow for tenants and landlords in Lisbon: the guarantee is held by a Soroban contract under
@@ -10,9 +12,8 @@ Built for HackMeridian.
 
 | Branch | Content |
 |---|---|
-| `main` | Contract, agents and the web app connected to Stellar Testnet |
-| `front` | The original front-end prototype (demo data), merged into `main` and connected |
-| `frontend-yacin` | An alternative front-end prototype (`frontend/`), not merged: same screens, `front/` was kept as the base |
+| `main` | Contract, agents and the web app connected to Stellar Testnet. Everything to judge is here |
+| `frontend-yacin` | An alternative front-end prototype (`frontend/`, demo data), not merged: `front/` was kept as the base |
 
 ## Repository layout
 
@@ -41,11 +42,23 @@ A Soroban contract, **LeaseVault**, holds the guarantee for the whole lease:
 Target users: foreign students and expats in Lisbon, and small good-faith landlords.
 Track: **Genesis + Stellar Composed**.
 
+### What we compose on Stellar
+
+| Building block | What it does in Fiável | Status |
+|---|---|---|
+| **Soroban** (LeaseVault, written during the hack) | Holds the first rent and the guarantee, enforces every lease rule, bounded arbitration, on-chain reputation | Live on testnet |
+| **USDC** through the Stellar Asset Contract | Rent and guarantee asset, moved by the contract | Live on testnet |
+| **Blend v2** lending pool (a live protocol) | Opt-in yield on the guarantee, approved by both parties, one month always kept liquid | Live on testnet, real yield |
+| **Agent wallet** (Stellar CLI keys) | The Lease Coordinator calls the public deadline functions and keeps leases alive; it pays fees only and can never receive funds | Live on testnet |
+| **Contract events + RPC** | The app's history, payments and activity are rebuilt from events, every action links to Stellar Expert | Live on testnet |
+
+Roadmap: passkey smart accounts and sponsored fees (no seed phrase, no XLM), EURC for euro rents, an anchor (SEP-24) to cash out the guarantee to a bank account.
+
 ## Architecture — how Stellar is used
 
 ```
  Tenant (Ana)        Landlord (Manuel)        Arbiter
- smart account       smart account            (approved mediator)
+ wallet              wallet                   (approved mediator)
       │  fund, pay_rent,     │  create_lease,          │ resolve
       │  respond, end_lease  │  claim_damage,          │
       │                      │  accept_counter         │
@@ -78,7 +91,7 @@ Track: **Genesis + Stellar Composed**.
 
 | Function | Who | Condition | Effect |
 |---|---|---|---|
-| `create_lease` | landlord | valid terms (guarantee ≥ 1 month), arbiter in the mediator registry | records rent, guarantee, deadlines, arbiter, yield option |
+| `create_lease` | landlord | valid terms (guarantee ≥ 1 month); every window between the deploy's `min_window` and `max_window`; arbiter in the mediator registry | records rent, guarantee, deadlines, arbiter, yield option |
 | `fund` | tenant | before the move-in deadline, arbiter still approved | locks first rent + guarantee (+ 5 % buffer with yield); supplies guarantee − 1 month to Blend if both parties opted in |
 | `confirm_move_in` | both | same inventory hash, before the deadline | releases the first rent, starts the lease |
 | `refund_no_keys` | anyone | deadline passed without move-in | everything back to the tenant |
@@ -98,8 +111,12 @@ Track: **Genesis + Stellar Composed**.
 | `approve_yield` | the other party | a proposal is pending | second approval lends `liquid − keep` on Blend; nothing moves before both approved |
 | `cancel_yield` | tenant or landlord | a proposal is pending | drops it and refunds a locked buffer (also done automatically by `end_lease`) |
 | `rate` | tenant or landlord | lease closed (no claim left open), once per party | scores the other party 1–5, recorded on the lease. It counts towards public reputation (`get_reputation`: score, leases, distinct counterparties, time rented) only if the lease met the minimum length and guarantee set at deploy (testnet: 180 s and 100 USDC) |
+| `send_message` | tenant or landlord | the tenant is known (lease funded), payload 1–1,024 bytes | publishes the message, encrypted in the app for the two parties, and chains it into the thread hash (`get_thread`): no message can be dropped or edited afterwards. Moves no money |
+| `bump` | anyone (the coordinator, daily) | lease exists | extends the storage life of the lease and its records, so a long lease is never archived between two payments |
 
-Durations are lease parameters, so the demo runs with 1 month = 60 seconds.
+Views: `get_lease`, `get_claim`, `guarantee_value`, `blend_at_risk`, `get_yield_proposal`, `get_ratings`, `get_reputation`, `max_claim` and `get_arbiter_record` (cases decided and share awarded to landlords, shown to the tenant before funding), `get_thread` (message count and thread hash).
+
+Durations are lease parameters, so the demo runs with 1 month = 60 seconds. LeaseVault bounds them at deploy (testnet: 30 s to 90 days; a mainnet deployment would use days).
 
 ### Who decides a dispute
 
@@ -113,8 +130,8 @@ Prerequisites: Rust with the `wasm32v1-none` target, Stellar CLI, Node 20+.
 On Windows, Visual Studio Build Tools with the "Desktop development with C++" workload is required.
 
 ```bash
-# Contract: 44 unit tests (lease lifecycle, unpaid rent, disputes, mediator registry and arbiter timeout, Blend yield and loss,
-# mid-lease investment, ratings)
+# Contract: 52 unit tests (lease lifecycle, unpaid rent, disputes, mediator registry and arbiter timeout, Blend yield and loss,
+# mid-lease investment, ratings, bounded terms, arbiter records, damage cap, storage bump, messages)
 cargo test -p lease_vault          # Windows: scripts\cargo.cmd test -p lease_vault
 stellar contract build --package lease_vault
 
@@ -141,6 +158,8 @@ npm run dev                        # http://localhost:5174/app
 
 See [`.env.example`](.env.example). The agents read `deployments/<network>.json` and take each role's key from `<ROLE>_SECRET_KEY` (`LANDLORD_SECRET_KEY`, `TENANT_SECRET_KEY`, `COORDINATOR_SECRET_KEY`…). In local development they fall back to the `stellar keys` identity `fiavel-<role>` created by the deploy script. Secrets never go in the repo.
 
+The web app's AI language help (translate, polish, summarize in the chat) needs `ANTHROPIC_API_KEY` on the server: a Vercel environment variable in production, or `front/.env.local` for `npm run dev`. It is read only by `front/api/assistant.ts` and the dev server, never sent to the browser. Without it, messages work and the AI buttons say the AI is off.
+
 ## Demo
 
 _TODO: public URL and video link._
@@ -154,7 +173,8 @@ Run `npm run dev` in `front/` and open http://localhost:5174/app. The app create
 3. Open the invite: the **Tenant Guardian** explains every rule with the lease's own values. **Lock** the first rent and the guarantee, with or without the Blend option.
 4. Tenant then landlord **confirm move-in**: both sign the same inventory hash. Photos are hashed in the browser, never uploaded.
 5. Pay rent from **Payments**. Leave a month unpaid: after the grace period the **Landlord Assistant** proposes to take it from the guarantee. Ask it to "seize the whole guarantee now" to see the refusal.
-6. **End the lease**, then let anyone **release** the guarantee after the claim window, or file a **damage claim**, answer with a counter-offer, and let the **arbiter** split the disputed amount.
+6. Open the lease and write in **Messages**: switch roles to answer. Each message is encrypted for the two parties and chained on-chain; the receiver can **translate** it, the writer can **polish** a draft, and either can **summarize** the thread with AI. A rule mentioned in a message links to the rule engine's explanation.
+7. **End the lease**, then let anyone **release** the guarantee after the claim window, or file a **damage claim**, answer with a counter-offer, and let the **arbiter** split the disputed amount.
 
 Every action shows a toast with its Stellar Expert link. The Activity page is rebuilt from contract events.
 
@@ -169,7 +189,8 @@ npm run demo                 # offer → funding with Blend deposit → co-signe
 npm run status -- 0 tenant   # what a role sees and can do on lease #0
 npm run explain -- 0 "what if Blend gets hacked?"
 npm run history -- 0         # payments and settlements, rebuilt from contract events
-npm run coordinator          # the Lease Coordinator loop (every 10 s)
+npm run risks -- 0           # red flags in the terms of lease #0 (windows, guarantee, arbiter's record)
+npm run coordinator          # the Lease Coordinator loop (every 10 s; keeps open leases alive once a day)
 ```
 
 The agents are deterministic: `src/rules.ts` mirrors every condition of the contract, `src/explain.ts` has one template per rule filled with on-chain values, `src/guards.ts` refuses any call outside the rules before a transaction is even built. In the refusal scene, the guard refuses "seize the whole guarantee now", then a forced call is rejected by the contract (`WrongStatus`).
@@ -182,7 +203,7 @@ LeaseVault v3 (`CCSWLUOQ…SEJAZ`), two leases played in the web app:
 |---|---|
 | Lease #0: an unpaid month paid to the landlord, triggered from the arbiter's wallet (no landlord signature) | [b3b318a9…](https://stellar.expert/explorer/testnet/tx/b3b318a9d96eb4ec8dbc8ff0aa7d336268e823f40822f800f40a9a2207885da8) |
 | Lease #0: release with the last month unpaid: 100 USDC to the landlord first, the rest to the tenant | [4ba60edd…](https://stellar.expert/explorer/testnet/tx/4ba60edd07891696a5ae0dc0fca7c1c116b8c259b5520511c316c1ec381c2895) |
-| Lease #1: claim of 150, offer of 75, arbiter silent for 2 min: settled halfway (112.50 / 37.50), the v3 rule since replaced by the tenant's offer in v4 | [053063f6…](https://stellar.expert/explorer/testnet/tx/053063f62d895a0b0e1a3e62bce00ba6109b9be3dcb8756bad7888f940540e36) |
+| Lease #1: claim of 150, offer of 75, arbiter silent for 2 min: settled halfway (112.50 / 37.50), the v3 rule, since replaced by the tenant's offer | [053063f6…](https://stellar.expert/explorer/testnet/tx/053063f62d895a0b0e1a3e62bce00ba6109b9be3dcb8756bad7888f940540e36) |
 
 LeaseVault v2 (`CDR2QYEL…GBRXP`), lease #0 played in the web app, then lease #1 for a rating below the thresholds:
 
@@ -214,6 +235,34 @@ On an earlier deployment (`CBYE4L4L…Z2ZU`), a funded lease with no move-in was
 
 Pre-hack toolchain check — `hello_world` contract: [CA4U4VVU…KJX5](https://stellar.expert/explorer/testnet/contract/CA4U4VVURIG54YYGN5SJUQZT3GZIRRTPQM3NUGEP4YKIGGHA3ZQGKJX5)
 
+### LeaseVault v5 (to deploy)
+
+v5 merges the two v4 branches: the mediator registry and the tenant's-offer rule on arbiter silence (`main`), plus bounded
+lease windows, a public record of every arbiter's decisions, `bump` and tenant-landlord messages (`audit-p0`, `messaging`).
+Both cap a damage claim at the guarantee minus the months taken from it. The transaction links above are from v1 to v3 until
+`scripts/deploy-testnet.sh` is run again and the demo replayed; the app shows the Messages card only on a contract that answers `get_thread`.
+
+### Messages between tenant and landlord
+
+- **Encrypted end to end.** Both parties already have a Stellar key; the app converts them to X25519, derives a key per lease
+  (HKDF, bound to the lease id) and encrypts with XChaCha20-Poly1305, authenticating the sender's address. The other party's
+  public key is its address on the lease, so there is nothing to exchange. The contract, the RPC and the arbiter only see ciphertext.
+- **Tamper-evident.** `send_message` keeps `sha256(previous || sender || seq || payload)` on-chain. The app recomputes it and shows
+  "All N messages match the thread hash"; the same test vector is checked in Rust (`thread_hash_matches_the_app`) and in the app.
+- **Hybrid AI, bounded.** Lease rules keep coming from the deterministic rule engine. Claude only rewrites text the user picks
+  (`front/server/assistant.ts`: translate, polish, summarize, in English, French or Portuguese), with no tools and no access
+  to keys or the chain. Every rewrite is shown for review before sending, and code compares the numbers in the original and the
+  rewrite: a changed amount or date is flagged.
+
+### Known limits
+
+- Testnet only. Wallets are test keypairs kept in the browser (`localStorage`); real use needs passkey smart accounts.
+- The optional team sign-in is a client-side check for demos, not access control.
+- `react-router-dom` 6.30 has two moderate advisories (SSR hydration, open redirect through user-supplied paths). The app is client-side only and navigates to paths it builds itself; moving to v7 is planned after the event.
+- Messages: who wrote, when and the length are public; only the content is encrypted. A device keeps the messages it has seen;
+  a new device sees only what the RPC's event history still holds. Losing a wallet key means losing access to its messages.
+- Reputation is costly, not impossible, to fake: ratings only count above a minimum lease length and guarantee, and the number of distinct counterparties is shown.
+
 ### Testnet notes
 
 - Testnet resets every quarter: `scripts/deploy-testnet.sh` recreates everything.
@@ -226,5 +275,5 @@ Before the hackathon: product research and planning (`docs/PLAN.md`), repository
 
 ## Use of AI
 
-- **In the product:** none. Fiável agents are deterministic (rule engine, no LLM): they explain lease rules from templates filled with on-chain values and prepare unsigned transactions; they never sign for users.
+- **In the product:** Fiável agents are deterministic (rule engine, no LLM): they explain lease rules from templates filled with on-chain values and prepare unsigned transactions; they never sign for users. The only LLM use is language help in the tenant-landlord chat (Claude through the Anthropic API: translate, polish, summarize), on the user's click, with no tools and no access to keys, funds or lease rules; changed figures are flagged by code.
 - **To build:** AI-assisted coding. _TODO: link to prompt log._

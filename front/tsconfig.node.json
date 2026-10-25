@@ -20,6 +20,8 @@
   },
   "include": [
     "vite.config.ts",
-    "tailwind.config.ts"
+    "tailwind.config.ts",
+    "server",
+    "api"
   ]
 }

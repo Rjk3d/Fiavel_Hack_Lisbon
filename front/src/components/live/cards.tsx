@@ -84,7 +84,7 @@ export function WalletCard() {
           <p className="tnum font-semibold">{b ? b.xlm.toFixed(0) : '…'}</p>
         </div>
       </div>
-      {(needsFunds || funding) && (
+      {(needsFunds || funding) && live.connection === 'live' && (
         <Button size="sm" className="mt-3 w-full" onClick={() => live.fund()} disabled={funding} icon={funding ? <Loader2 size={14} className="animate-spin" /> : <WalletIcon size={14} />}>
           {funding ? live.fundStep || 'Funding…' : 'Get test funds'}
         </Button>
@@ -244,7 +244,8 @@ export function InviteBox({ view }: { view: LeaseView }) {
 export function NoFunds() {
   const live = useLive()
   const b = live.balances[live.role]
-  if (b && b.exists && b.usdc > 0n) return null
+  // Offline, an unknown balance is not an empty wallet: the offline banner says why.
+  if (live.connection !== 'live' || (b && b.exists && b.usdc > 0n)) return null
   return (
     <div className="flex flex-col gap-3 rounded-xl2 border border-brand/20 bg-brand-tint/60 p-4 sm:flex-row sm:items-center">
       <WalletIcon size={20} className="shrink-0 text-brand" />

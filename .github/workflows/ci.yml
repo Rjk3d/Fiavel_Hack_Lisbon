@@ -1,0 +1,52 @@
+# Runs on every push and pull request: contract tests, agents, web app. No secret needed.
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  contract:
+    name: LeaseVault (Rust tests + wasm build)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32v1-none
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo test -p lease_vault
+      - run: cargo build -p lease_vault --release --target wasm32v1-none
+
+  agents:
+    name: Agents (types + rule engine tests)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - run: npm ci && npm run build
+        working-directory: packages/lease-vault-client
+      - run: npm ci
+        working-directory: agents
+      - run: npm run typecheck
+        working-directory: agents
+      - run: npm test
+        working-directory: agents
+
+  front:
+    name: Web app (tests + type check + build)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - run: npm ci
+        working-directory: front
+      # The build also builds the generated contract client the tests import.
+      - run: npm run build
+        working-directory: front
+      - run: npm test
+        working-directory: front
