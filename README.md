@@ -1,12 +1,25 @@
 # Fiável
 
-**Fair rentals. Enforced by Stellar, explained by AI.**
+> AI agents for fair rentals. Smart contracts for trust.
 
-Fiável is a programmable *fiador* (rent guarantor) on Stellar: a neutral vault that protects the landlord's rent and returns the tenant's deposit automatically.
+Rental escrow for tenants and landlords in Lisbon: deposits held under transparent rules,
+AI assistants that explain and prepare, Stellar Soroban for supported fund movements.
+Built for HackMeridian.
 
-Track: **Genesis + Stellar Composed** (HackMeridian, Lisbon).
+## Branches
 
-> Work in progress. Sections marked _TODO_ are filled in during the hackathon.
+| Branch | Content |
+|---|---|
+| `main` | Stable base of the project |
+| `front` | Frontend prototype (`front/`, Vite + React + TypeScript + Tailwind, demo data) |
+
+## Repository layout
+
+| Path | Content |
+|---|---|
+| `front/` | Frontend (on the `front` branch for now) |
+| `contracts/` | Soroban contracts (Rust). `hello_world` is the pre-hack toolchain check. |
+| `docs/PLAN.md` | Feature plan (v2) and checkpoints |
 
 ## Problem
 
@@ -20,14 +33,7 @@ A Soroban contract, **LeaseVault**, holds the guarantee for the whole lease:
 - the deposit is returned by default.
 
 Target users: foreign students and expats in Lisbon, and small good-faith landlords.
-
-## Repository layout
-
-| Path | Content |
-|---|---|
-| `contracts/` | Soroban contracts (Rust). `hello_world` is the pre-hack toolchain check. |
-| `web/` | Next.js + TypeScript + Tailwind PWA, agent API routes |
-| `docs/PLAN.md` | Feature plan and checkpoints |
+Track: **Genesis + Stellar Composed**.
 
 ## Architecture — how Stellar is used
 
@@ -51,17 +57,13 @@ On Windows, Visual Studio Build Tools with the "Desktop development with C++" wo
 # Contracts
 cargo test
 stellar contract build
-
-# Web
-cd web
-cp .env.example .env.local
-npm install
-npm run dev
 ```
+
+_TODO: front and agent backend setup._
 
 ## Environment variables
 
-See [`web/.env.example`](web/.env.example).
+See [`.env.example`](.env.example).
 
 ## Demo
 
@@ -75,7 +77,7 @@ _TODO: Stellar Expert links for funding, unpaid-rent claim, refusal, release, Bl
 
 ## Prior work disclosure
 
-Before the hackathon: product research and planning (`docs/PLAN.md`), repository scaffolding (Soroban workspace via `stellar contract init`, Next.js via `create-next-app`) and a hello-world contract to verify the toolchain. All product code is written during the event.
+Before the hackathon: product research and planning (`docs/PLAN.md`), repository scaffolding (Soroban workspace via `stellar contract init`) and a hello-world contract to verify the toolchain. _TODO: list front prototype status at event start._ All LeaseVault code is written during the event.
 
 ## Use of AI
 
