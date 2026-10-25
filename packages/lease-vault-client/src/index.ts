@@ -1,0 +1,798 @@
+import { Buffer } from "buffer";
+import { Address } from "@stellar/stellar-sdk";
+import {
+  AssembledTransaction,
+  Client as ContractClient,
+  ClientOptions as ContractClientOptions,
+  MethodOptions,
+  Result,
+  Spec as ContractSpec,
+} from "@stellar/stellar-sdk/contract";
+import type {
+  u32,
+  i32,
+  u64,
+  i64,
+  u128,
+  i128,
+  u256,
+  i256,
+  Option,
+  Timepoint,
+  Duration,
+} from "@stellar/stellar-sdk/contract";
+export * from "@stellar/stellar-sdk";
+export * as contract from "@stellar/stellar-sdk/contract";
+export * as rpc from "@stellar/stellar-sdk/rpc";
+
+if (typeof window !== "undefined") {
+  //@ts-ignore Buffer exists
+  window.Buffer = window.Buffer || Buffer;
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+export interface Request {
+  address: string;
+  amount: i128;
+  request_type: u32;
+}
+
+
+export interface Reserve {
+  asset: string;
+  config: ReserveConfig;
+  data: ReserveData;
+  scalar: i128;
+}
+
+
+export interface Positions {
+  collateral: Map<u32, i128>;
+  liabilities: Map<u32, i128>;
+  supply: Map<u32, i128>;
+}
+
+
+export interface ReserveData {
+  b_rate: i128;
+  b_supply: i128;
+  backstop_credit: i128;
+  d_rate: i128;
+  d_supply: i128;
+  ir_mod: i128;
+  last_time: u64;
+}
+
+
+export interface ReserveConfig {
+  c_factor: u32;
+  decimals: u32;
+  enabled: boolean;
+  index: u32;
+  l_factor: u32;
+  max_util: u32;
+  r_base: u32;
+  r_one: u32;
+  r_three: u32;
+  r_two: u32;
+  reactivity: u32;
+  supply_cap: i128;
+  util: u32;
+}
+
+
+export interface Claim {
+  amount: i128;
+  /**
+ * When the tenant countered (0 before): opens the arbitration window.
+ */
+answered_at: u64;
+  bond: i128;
+  evidence: Buffer;
+  filed_at: u64;
+  /**
+ * Tenant counter-offer, once answered.
+ */
+offer: Option<i128>;
+}
+
+export const Errors = {
+  1: {message:"LeaseNotFound"},
+  2: {message:"InvalidTerms"},
+  3: {message:"WrongStatus"},
+  4: {message:"NotAParty"},
+  5: {message:"DeadlinePassed"},
+  6: {message:"TooEarly"},
+  7: {message:"HashMismatch"},
+  8: {message:"InvalidAmount"},
+  9: {message:"NothingDue"},
+  10: {message:"BlendIsSafe"},
+  11: {message:"SameParty"},
+  12: {message:"AlreadyConfirmed"},
+  13: {message:"AlreadyRated"},
+  14: {message:"InvalidScore"},
+  /**
+   * The arbiter named in the terms is not in the mediator registry.
+   */
+  15: {message:"ArbiterNotApproved"},
+  /**
+   * Self-registration is off: only the admin approves mediators.
+   */
+  16: {message:"RegistryClosed"},
+  /**
+   * A message is empty or longer than 1,024 bytes.
+   */
+  17: {message:"InvalidMessage"}
+}
+
+
+export interface Lease {
+  created_at: u64;
+  ended_at: u64;
+  entry_hash: Option<Buffer>;
+  exit_hash: Option<Buffer>;
+  landlord: string;
+  landlord_moved_in: boolean;
+  /**
+ * Guarantee tokens held by this contract for the lease.
+ */
+liquid: i128;
+  /**
+ * Months paid by the tenant or taken from the guarantee. Month 0 is the
+ * first rent, locked at funding.
+ */
+months_settled: u32;
+  /**
+ * Months taken from the guarantee for the landlord.
+ */
+months_unpaid: u32;
+  /**
+ * Principal still placed on Blend.
+ */
+placed: i128;
+  /**
+ * First month of rent, released at move-in.
+ */
+rent_escrow: i128;
+  /**
+ * Blend b-tokens attributed to the lease.
+ */
+shares: i128;
+  /**
+ * Move-in time; month `m` is due at `start + m * period`.
+ */
+start: u64;
+  status: Status;
+  tenant: Option<string>;
+  tenant_moved_in: boolean;
+  terms: Terms;
+  yield_active: boolean;
+}
+
+
+/**
+ * Fixed by the landlord at creation and accepted by the tenant when funding.
+ * Durations are in seconds so the demo can run with 1 month = 60 s.
+ */
+export interface Terms {
+  arbiter: string;
+  /**
+ * Time the arbiter has to decide once the tenant countered. Past it,
+ * anyone can settle the dispute at the tenant's offer: the guarantee
+ * comes back by default, and inflating a claim earns nothing.
+ */
+arbitration_window: u64;
+  /**
+ * Extra the tenant locks when the yield option is on, in basis points
+ * of the deposit. It absorbs a Blend loss before anything else.
+ */
+buffer_bps: u32;
+  /**
+ * Time after the end of the lease to file a damage claim.
+ */
+claim_window: u64;
+  /**
+ * Guarantee, at least one month of rent.
+ */
+deposit: i128;
+  /**
+ * Delay after a due date before an unpaid month can be claimed.
+ */
+grace: u64;
+  landlord_share_bps: u32;
+  months: u32;
+  /**
+ * Time after creation to fund and confirm move-in.
+ */
+move_in_window: u64;
+  /**
+ * Length of one rental month.
+ */
+period: u64;
+  rent: i128;
+  /**
+ * Time the tenant has to answer a damage claim.
+ */
+response_window: u64;
+  /**
+ * Yield split; the arbitration fund gets the rest.
+ */
+tenant_share_bps: u32;
+  /**
+ * Landlord offers to place the guarantee on Blend.
+ */
+yield_offered: boolean;
+}
+
+
+/**
+ * Set once by the constructor. The pool cannot be changed afterwards:
+ * nobody can redirect a guarantee to another protocol.
+ */
+export interface Config {
+  /**
+ * Curates the mediator registry (the arbitration fund's operator).
+ */
+admin: string;
+  /**
+ * Receives its share of the yield and forfeited dispute bonds.
+ */
+arbitration_fund: string;
+  /**
+ * Bond the landlord posts with a damage claim.
+ */
+dispute_bond: i128;
+  /**
+ * ... and at most this long, so no window can lock a guarantee forever.
+ */
+max_window: u64;
+  /**
+ * ... and held at least this guarantee. Below either, faking a good
+ * reputation with a second wallet would cost nothing.
+ */
+min_rated_deposit: i128;
+  /**
+ * A rating only counts towards reputation if the lease lasted at least
+ * this long (months × period, seconds) ...
+ */
+min_rated_duration: u64;
+  /**
+ * Every lease window (move-in, claim, response, arbitration) and the
+ * rental period must last at least this long, so no lease can leave the
+ * tenant no time to answer (demo deployments use seconds) ...
+ */
+min_window: u64;
+  /**
+ * Testnet only: anyone can join the registry by signing, so judges can
+ * play the mediator. On mainnet it is false and only `admin` approves.
+ */
+open_registry: boolean;
+  /**
+ * The single whitelisted Blend pool.
+ */
+pool: string;
+  /**
+ * Index of `token` in the pool's reserve list.
+ */
+reserve_index: u32;
+  /**
+ * Stablecoin used for rent and guarantees (SAC address).
+ */
+token: string;
+}
+
+export type Status = {tag: "Created", values: void} | {tag: "Funded", values: void} | {tag: "Active", values: void} | {tag: "Ended", values: void} | {tag: "Claimed", values: void} | {tag: "Disputed", values: void} | {tag: "Closed", values: void} | {tag: "Refunded", values: void};
+
+
+/**
+ * The message thread of a lease. Messages themselves are only in events,
+ * encrypted for the two parties; the contract keeps their number and a
+ * running hash, so nobody can drop or rewrite a message afterwards.
+ */
+export interface Thread {
+  count: u32;
+  /**
+ * sha256(previous hash || sender || seq || payload), zero when empty.
+ */
+hash: Buffer;
+}
+
+export type DataKey = {tag: "Config", values: void} | {tag: "NextId", values: void} | {tag: "Lease", values: readonly [u64]} | {tag: "Claim", values: readonly [u64]} | {tag: "YieldProposal", values: readonly [u64]} | {tag: "Ratings", values: readonly [u64]} | {tag: "Reputation", values: readonly [string]} | {tag: "RatedBy", values: readonly [string, string]} | {tag: "BufferLocked", values: readonly [u64]} | {tag: "Arbiters", values: void} | {tag: "ArbiterRecord", values: readonly [string]} | {tag: "Thread", values: readonly [u64]};
+
+
+/**
+ * Scores an address received on leases that met the rating thresholds.
+ */
+export interface Reputation {
+  count: u32;
+  /**
+ * Different addresses that rated it: five stars from one friend show.
+ */
+counterparties: u32;
+  /**
+ * Total duration of the rated leases, in seconds.
+ */
+lease_seconds: u64;
+  total: u32;
+}
+
+
+/**
+ * Scores (1 to 5) the parties gave each other once the lease was over.
+ */
+export interface LeaseRatings {
+  /**
+ * Score the landlord gave the tenant.
+ */
+by_landlord: Option<u32>;
+  /**
+ * Score the tenant gave the landlord.
+ */
+by_tenant: Option<u32>;
+}
+
+
+/**
+ * Every decision an arbiter made, so a tenant can see before funding whether
+ * the arbiter named in a lease tends to side with landlords.
+ */
+export interface ArbiterRecord {
+  cases: u32;
+  /**
+ * Sum of the disputed claims the arbiter decided.
+ */
+claimed: i128;
+  /**
+ * Sum of what the arbiter awarded to landlords out of those claims.
+ */
+to_landlord: i128;
+}
+
+
+/**
+ * Proposal to lend the guarantee on Blend once the lease is running. It
+ * only executes when both parties have approved it. The tenant's buffer is
+ * locked when the tenant approves and refunded if the proposal is dropped.
+ */
+export interface YieldProposal {
+  /**
+ * Buffer the tenant locks on approval (terms.buffer_bps of the deposit).
+ */
+buffer: i128;
+  /**
+ * Part of the guarantee that stays liquid in the contract (≥ one month).
+ */
+keep: i128;
+  landlord_ok: boolean;
+  landlord_share_bps: u32;
+  proposer: string;
+  tenant_ok: boolean;
+  tenant_share_bps: u32;
+}
+
+export interface Client {
+  /**
+   * Construct and simulate a bump transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
+   * Extends the storage life of a lease and its records. Callable by
+   * anyone (the coordinator does it), so a long lease with no activity is
+   * never archived between two payments.
+   */
+  bump: ({id}: {id: u64}, options?: MethodOptions) => Promise<AssembledTransaction<null>>
+
+  /**
+   * Construct and simulate a fund transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
+   * Tenant accepts the terms and locks the first rent plus the guarantee.
+   * With the yield option, the tenant also locks the buffer and everything
+   * but one month of rent goes to Blend.
+   */
+  fund: ({id, tenant, accept_yield}: {id: u64, tenant: string, accept_yield: boolean}, options?: MethodOptions) => Promise<AssembledTransaction<null>>
+
+  /**
+   * Construct and simulate a rate transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
+   * Once the lease is settled, each party rates the other from 1 to 5,
+   * once. Only the two parties of a real lease can rate, so scores cannot
+   * be bought without signing and funding a lease, and nobody can rate
+   * while a claim is still open.
+   */
+  rate: ({id, who, score}: {id: u64, who: string, score: u32}, options?: MethodOptions) => Promise<AssembledTransaction<null>>
+
+  /**
+   * Construct and simulate a release transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
+   * No damage claim within the window: months still unpaid go to the
+   * landlord, then the rest of the guarantee and the tenant's share of the
+   * yield go back to the tenant. Callable by anyone.
+   */
+  release: ({id}: {id: u64}, options?: MethodOptions) => Promise<AssembledTransaction<null>>
+
+  /**
+   * Construct and simulate a resolve transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
+   * Arbiter splits the disputed amount between the two parties only. If
+   * the landlord gets less than half of the claim, the bond is forfeited
+   * to the arbitration fund.
+   */
+  resolve: ({id, to_landlord}: {id: u64, to_landlord: i128}, options?: MethodOptions) => Promise<AssembledTransaction<null>>
+
+  /**
+   * Construct and simulate a respond transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
+   * Tenant answers a damage claim. Offering the full amount accepts it;
+   * anything less is a counter-offer that the landlord can accept or the
+   * arbiter settles.
+   */
+  respond: ({id, offer}: {id: u64, offer: i128}, options?: MethodOptions) => Promise<AssembledTransaction<null>>
+
+  /**
+   * Construct and simulate a pay_rent transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
+   * Tenant pays the next month directly to the landlord, during the lease
+   * or late, until the guarantee is settled.
+   */
+  pay_rent: ({id}: {id: u64}, options?: MethodOptions) => Promise<AssembledTransaction<null>>
+
+  /**
+   * Construct and simulate a end_lease transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
+   * Either party ends the lease after its term and may record the exit
+   * inventory hash. Opens the damage-claim window.
+   */
+  end_lease: ({id, who, exit_hash}: {id: u64, who: string, exit_hash: Option<Buffer>}, options?: MethodOptions) => Promise<AssembledTransaction<null>>
+
+  /**
+   * Construct and simulate a get_claim transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
+   * The damage claim of a lease, if one was filed.
+   */
+  get_claim: ({id}: {id: u64}, options?: MethodOptions) => Promise<AssembledTransaction<Option<Claim>>>
+
+  /**
+   * Construct and simulate a get_lease transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
+   */
+  get_lease: ({id}: {id: u64}, options?: MethodOptions) => Promise<AssembledTransaction<Lease>>
+
+  /**
+   * Construct and simulate a max_claim transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
+   * Most the landlord can still claim for damage once the lease ended:
+   * the guarantee itself, minus the months already taken from it. The
+   * tenant's buffer and yield share are never claimable.
+   * Takes into account the Blend position and the months still unpaid,
+   * which `claim_damage` pays to the landlord first.
+   */
+  max_claim: ({id}: {id: u64}, options?: MethodOptions) => Promise<AssembledTransaction<i128>>
+
+  /**
+   * Construct and simulate a exit_blend transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
+   * Pulls a lease's guarantee out of Blend. The tenant or the landlord can
+   * do it at any time (the option is reversible). Anyone else, such as the
+   * coordinator agent, only when the position lost value or the pool is
+   * close to full utilization.
+   */
+  exit_blend: ({id, caller}: {id: u64, caller: string}, options?: MethodOptions) => Promise<AssembledTransaction<null>>
+
+  /**
+   * Construct and simulate a get_config transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
+   */
+  get_config: (options?: MethodOptions) => Promise<AssembledTransaction<Config>>
+
+  /**
+   * Construct and simulate a get_thread transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
+   * Number of messages on a lease and the hash of the whole thread.
+   */
+  get_thread: ({id}: {id: u64}, options?: MethodOptions) => Promise<AssembledTransaction<Thread>>
+
+  /**
+   * Construct and simulate a is_arbiter transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
+   */
+  is_arbiter: ({who}: {who: string}, options?: MethodOptions) => Promise<AssembledTransaction<boolean>>
+
+  /**
+   * Construct and simulate a get_ratings transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
+   */
+  get_ratings: ({id}: {id: u64}, options?: MethodOptions) => Promise<AssembledTransaction<LeaseRatings>>
+
+  /**
+   * Construct and simulate a lease_count transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
+   */
+  lease_count: (options?: MethodOptions) => Promise<AssembledTransaction<u64>>
+
+  /**
+   * Construct and simulate a cancel_yield transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
+   * Either party withdraws a pending proposal; a locked buffer goes back
+   * to the tenant. Once placed, `exit_blend` brings the funds back.
+   */
+  cancel_yield: ({id, who}: {id: u64, who: string}, options?: MethodOptions) => Promise<AssembledTransaction<null>>
+
+  /**
+   * Construct and simulate a claim_damage transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
+   * Landlord claims `amount` for damage, with the hash of the evidence,
+   * and posts the dispute bond. Months still unpaid are paid to the
+   * landlord first; the undisputed rest goes back to the tenant immediately.
+   */
+  claim_damage: ({id, amount, evidence}: {id: u64, amount: i128, evidence: Buffer}, options?: MethodOptions) => Promise<AssembledTransaction<null>>
+
+  /**
+   * Construct and simulate a claim_unpaid transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
+   * Pays an unpaid month to the landlord from the guarantee once the grace
+   * period has passed: liquid month first, then Blend. Callable by anyone,
+   * since the money can only go to the landlord.
+   */
+  claim_unpaid: ({id}: {id: u64}, options?: MethodOptions) => Promise<AssembledTransaction<null>>
+
+  /**
+   * Construct and simulate a create_lease transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
+   * Landlord publishes the terms. Returns the lease id to share with the tenant.
+   */
+  create_lease: ({landlord, terms}: {landlord: string, terms: Terms}, options?: MethodOptions) => Promise<AssembledTransaction<u64>>
+
+  /**
+   * Construct and simulate a get_arbiters transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
+   */
+  get_arbiters: (options?: MethodOptions) => Promise<AssembledTransaction<Array<string>>>
+
+  /**
+   * Construct and simulate a send_message transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
+   * Sends a message to the other party of a lease, once the tenant is
+   * known. The app encrypts it for the two parties before it gets here, so
+   * the contract only checks who sends it and chains it into the thread
+   * hash. It moves no money and changes nothing else on the lease.
+   */
+  send_message: ({id, from, payload}: {id: u64, from: string, payload: Buffer}, options?: MethodOptions) => Promise<AssembledTransaction<Thread>>
+
+  /**
+   * Construct and simulate a approve_yield transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
+   * The other party approves the pending proposal. The second approval
+   * places `liquid - keep` on Blend; the tenant's buffer joins the liquid part.
+   */
+  approve_yield: ({id, who}: {id: u64, who: string}, options?: MethodOptions) => Promise<AssembledTransaction<null>>
+
+  /**
+   * Construct and simulate a blend_at_risk transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
+   * True when anyone may call `exit_blend` for this lease.
+   */
+  blend_at_risk: ({id}: {id: u64}, options?: MethodOptions) => Promise<AssembledTransaction<boolean>>
+
+  /**
+   * Construct and simulate a execute_claim transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
+   * Tenant stayed silent past the response window: the claim is paid.
+   * Callable by anyone.
+   */
+  execute_claim: ({id}: {id: u64}, options?: MethodOptions) => Promise<AssembledTransaction<null>>
+
+  /**
+   * Construct and simulate a propose_yield transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
+   * A party proposes to lend part of the guarantee on Blend while the
+   * lease runs. `keep` stays liquid in the contract and must cover at
+   * least one month of rent. Nothing moves until the other party approves.
+   */
+  propose_yield: ({id, who, keep, tenant_share_bps, landlord_share_bps}: {id: u64, who: string, keep: i128, tenant_share_bps: u32, landlord_share_bps: u32}, options?: MethodOptions) => Promise<AssembledTransaction<null>>
+
+  /**
+   * Construct and simulate a accept_counter transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
+   * Landlord accepts the tenant's counter-offer.
+   */
+  accept_counter: ({id}: {id: u64}, options?: MethodOptions) => Promise<AssembledTransaction<null>>
+
+  /**
+   * Construct and simulate a expire_dispute transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
+   * The arbiter did not decide within the arbitration window: the dispute
+   * is settled at the tenant's offer, since the claimant carries the burden
+   * of proof and the guarantee comes back by default. A halfway split
+   * would reward inflated claims. The bond goes back to the landlord: the
+   * arbiter's silence is not the landlord's fault. Callable by anyone.
+   */
+  expire_dispute: ({id}: {id: u64}, options?: MethodOptions) => Promise<AssembledTransaction<null>>
+
+  /**
+   * Construct and simulate a get_reputation transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
+   * Scores received by `who` across all leases: average = total / count.
+   */
+  get_reputation: ({who}: {who: string}, options?: MethodOptions) => Promise<AssembledTransaction<Reputation>>
+
+  /**
+   * Construct and simulate a refund_no_keys transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
+   * Move-in deadline passed without both confirmations: the tenant gets
+   * everything back. Callable by anyone.
+   */
+  refund_no_keys: ({id}: {id: u64}, options?: MethodOptions) => Promise<AssembledTransaction<null>>
+
+  /**
+   * Construct and simulate a revoke_arbiter transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
+   * The admin removes a mediator. Leases already funded keep theirs; new
+   * leases and pending offers can no longer use it.
+   */
+  revoke_arbiter: ({arbiter}: {arbiter: string}, options?: MethodOptions) => Promise<AssembledTransaction<null>>
+
+  /**
+   * Construct and simulate a approve_arbiter transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
+   * The admin approves a mediator. Leases can only name approved ones.
+   */
+  approve_arbiter: ({arbiter}: {arbiter: string}, options?: MethodOptions) => Promise<AssembledTransaction<null>>
+
+  /**
+   * Construct and simulate a confirm_move_in transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
+   * Both parties co-sign the hash of the move-in inventory. The second
+   * signature must match the first; it then releases the first rent.
+   */
+  confirm_move_in: ({id, who, entry_hash}: {id: u64, who: string, entry_hash: Buffer}, options?: MethodOptions) => Promise<AssembledTransaction<null>>
+
+  /**
+   * Construct and simulate a guarantee_value transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
+   * Current value of the lease's guarantee: liquid part plus Blend position.
+   */
+  guarantee_value: ({id}: {id: u64}, options?: MethodOptions) => Promise<AssembledTransaction<i128>>
+
+  /**
+   * Construct and simulate a register_arbiter transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
+   * Testnet only: a mediator joins the registry by signing. Refused when
+   * the registry is curated (`open_registry` false at deploy).
+   */
+  register_arbiter: ({arbiter}: {arbiter: string}, options?: MethodOptions) => Promise<AssembledTransaction<null>>
+
+  /**
+   * Construct and simulate a get_arbiter_record transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
+   * Decisions made by an arbiter: number of cases, total claimed, total
+   * awarded to landlords.
+   */
+  get_arbiter_record: ({who}: {who: string}, options?: MethodOptions) => Promise<AssembledTransaction<ArbiterRecord>>
+
+  /**
+   * Construct and simulate a get_yield_proposal transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
+   */
+  get_yield_proposal: ({id}: {id: u64}, options?: MethodOptions) => Promise<AssembledTransaction<Option<YieldProposal>>>
+
+}
+export class Client extends ContractClient {
+  static async deploy<T = Client>(
+        /** Constructor/Initialization Args for the contract's `__constructor` method */
+        {token, pool, arbitration_fund, dispute_bond, min_rated_duration, min_rated_deposit, admin, open_registry, min_window, max_window, arbiters}: {token: string, pool: string, arbitration_fund: string, dispute_bond: i128, min_rated_duration: u64, min_rated_deposit: i128, admin: string, open_registry: boolean, min_window: u64, max_window: u64, arbiters: Array<string>},
+    /** Options for initializing a Client as well as for calling a method, with extras specific to deploying. */
+    options: MethodOptions &
+      Omit<ContractClientOptions, "contractId"> & {
+        /** The hash of the Wasm blob, which must already be installed on-chain. */
+        wasmHash: Buffer | string;
+        /** Salt used to generate the contract's ID. Passed through to {@link Operation.createCustomContract}. Default: random. */
+        salt?: Buffer | Uint8Array;
+        /** The format used to decode `wasmHash`, if it's provided as a string. */
+        format?: "hex" | "base64";
+      }
+  ): Promise<AssembledTransaction<T>> {
+    return ContractClient.deploy({token, pool, arbitration_fund, dispute_bond, min_rated_duration, min_rated_deposit, admin, open_registry, min_window, max_window, arbiters}, options)
+  }
+  constructor(public readonly options: ContractClientOptions) {
+    super(
+      new ContractSpec([ "AAAABQAAAAAAAAAAAAAABVJhdGVkAAAAAAAAAQAAAAVyYXRlZAAAAAAAAAUAAAAAAAAAAmlkAAAAAAAGAAAAAQAAAAAAAAAFcmF0ZXIAAAAAAAATAAAAAQAAAAAAAAAFcmF0ZWUAAAAAAAATAAAAAAAAAAAAAAAFc2NvcmUAAAAAAAAEAAAAAAAAADVGYWxzZSB3aGVuIHRoZSBsZWFzZSB3YXMgYmVsb3cgdGhlIHJhdGluZyB0aHJlc2hvbGRzLgAAAAAAAAdjb3VudGVkAAAAAAEAAAAAAAAAAg==",
+        "AAAABQAAAAAAAAAAAAAAB01vdmVkSW4AAAAAAQAAAAhtb3ZlZF9pbgAAAAIAAAAAAAAAAmlkAAAAAAAGAAAAAQAAAAAAAAAKZW50cnlfaGFzaAAAAAAD7gAAACAAAAAAAAAAAg==",
+        "AAAABQAAAAAAAAAAAAAACFJlbnRQYWlkAAAAAQAAAAlyZW50X3BhaWQAAAAAAAADAAAAAAAAAAJpZAAAAAAABgAAAAEAAAAAAAAABW1vbnRoAAAAAAAABAAAAAAAAAAAAAAABmFtb3VudAAAAAAACwAAAAAAAAAC",
+        "AAAABQAAAAAAAAAAAAAACkxlYXNlRW5kZWQAAAAAAAEAAAALbGVhc2VfZW5kZWQAAAAAAQAAAAAAAAACaWQAAAAAAAYAAAABAAAAAg==",
+        "AAAABQAAAAAAAAAAAAAAC0JsZW5kRXhpdGVkAAAAAAEAAAAMYmxlbmRfZXhpdGVkAAAAAwAAAAAAAAACaWQAAAAAAAYAAAABAAAAAAAAAAhyZWFsaXplZAAAAAsAAAAAAAAAAAAAAARnYWluAAAACwAAAAAAAAAC",
+        "AAAABQAAAAAAAAAAAAAAC0xlYXNlRnVuZGVkAAAAAAEAAAAMbGVhc2VfZnVuZGVkAAAABAAAAAAAAAACaWQAAAAAAAYAAAABAAAAAAAAAAZ0ZW5hbnQAAAAAABMAAAABAAAAAAAAAAV0b3RhbAAAAAAAAAsAAAAAAAAAAAAAAAx5aWVsZF9hY3RpdmUAAAABAAAAAAAAAAI=",
+        "AAAABQAAAHxBbiBlbmNyeXB0ZWQgbWVzc2FnZSBiZXR3ZWVuIHRoZSB0d28gcGFydGllcy4gT25seSB0aGV5IGNhbiByZWFkCmBwYXlsb2FkYDsgYHRocmVhZGAgaXMgdGhlIHJ1bm5pbmcgaGFzaCBhZnRlciB0aGlzIG1lc3NhZ2UuAAAAAAAAAAtNZXNzYWdlU2VudAAAAAABAAAADG1lc3NhZ2Vfc2VudAAAAAUAAAAAAAAAAmlkAAAAAAAGAAAAAQAAAAAAAAAEZnJvbQAAABMAAAABAAAAAAAAAANzZXEAAAAABAAAAAAAAAAAAAAAB3BheWxvYWQAAAAADgAAAAAAAAAAAAAABnRocmVhZAAAAAAD7gAAACAAAAAAAAAAAg==",
+        "AAAABQAAAAAAAAAAAAAADExlYXNlQ3JlYXRlZAAAAAEAAAANbGVhc2VfY3JlYXRlZAAAAAAAAAQAAAAAAAAAAmlkAAAAAAAGAAAAAQAAAAAAAAAIbGFuZGxvcmQAAAATAAAAAQAAAAAAAAAEcmVudAAAAAsAAAAAAAAAAAAAAAdkZXBvc2l0AAAAAAsAAAAAAAAAAg==",
+        "AAAABQAAAAAAAAAAAAAADExlYXNlU2V0dGxlZAAAAAEAAAANbGVhc2Vfc2V0dGxlZAAAAAAAAAMAAAAAAAAAAmlkAAAAAAAGAAAAAQAAAAAAAAALdG9fbGFuZGxvcmQAAAAACwAAAAAAAAAAAAAACXRvX3RlbmFudAAAAAAAAAsAAAAAAAAAAg==",
+        "AAAABQAAAAAAAAAAAAAADUNsYWltQW5zd2VyZWQAAAAAAAABAAAADmNsYWltX2Fuc3dlcmVkAAAAAAACAAAAAAAAAAJpZAAAAAAABgAAAAEAAAAAAAAABW9mZmVyAAAAAAAACwAAAAAAAAAC",
+        "AAAABQAAAAAAAAAAAAAADURhbWFnZUNsYWltZWQAAAAAAAABAAAADmRhbWFnZV9jbGFpbWVkAAAAAAADAAAAAAAAAAJpZAAAAAAABgAAAAEAAAAAAAAABmFtb3VudAAAAAAACwAAAAAAAAAAAAAADHJlZnVuZGVkX25vdwAAAAsAAAAAAAAAAg==",
+        "AAAABQAAAAAAAAAAAAAADUxlYXNlUmVmdW5kZWQAAAAAAAABAAAADmxlYXNlX3JlZnVuZGVkAAAAAAACAAAAAAAAAAJpZAAAAAAABgAAAAEAAAAAAAAABmFtb3VudAAAAAAACwAAAAAAAAAC",
+        "AAAABQAAAAAAAAAAAAAADVVucGFpZENsYWltZWQAAAAAAAABAAAADnVucGFpZF9jbGFpbWVkAAAAAAADAAAAAAAAAAJpZAAAAAAABgAAAAEAAAAAAAAABW1vbnRoAAAAAAAABAAAAAAAAAAAAAAABmFtb3VudAAAAAAACwAAAAAAAAAC",
+        "AAAABQAAAAAAAAAAAAAADVlpZWxkQXBwcm92ZWQAAAAAAAABAAAADnlpZWxkX2FwcHJvdmVkAAAAAAACAAAAAAAAAAJpZAAAAAAABgAAAAEAAAAAAAAACGFwcHJvdmVyAAAAEwAAAAEAAAAC",
+        "AAAABQAAAAAAAAAAAAAADVlpZWxkUHJvcG9zZWQAAAAAAAABAAAADnlpZWxkX3Byb3Bvc2VkAAAAAAADAAAAAAAAAAJpZAAAAAAABgAAAAEAAAAAAAAACHByb3Bvc2VyAAAAEwAAAAEAAAAAAAAABGtlZXAAAAALAAAAAAAAAAI=",
+        "AAAABQAAAAAAAAAAAAAADkFyYml0ZXJSZXZva2VkAAAAAAABAAAAD2FyYml0ZXJfcmV2b2tlZAAAAAABAAAAAAAAAAdhcmJpdGVyAAAAABMAAAABAAAAAg==",
+        "AAAABQAAAAAAAAAAAAAADkJsZW5kRGVwb3NpdGVkAAAAAAABAAAAD2JsZW5kX2RlcG9zaXRlZAAAAAACAAAAAAAAAAJpZAAAAAAABgAAAAEAAAAAAAAABmFtb3VudAAAAAAACwAAAAAAAAAC",
+        "AAAABQAAAAAAAAAAAAAADllpZWxkQ2FuY2VsbGVkAAAAAAABAAAAD3lpZWxkX2NhbmNlbGxlZAAAAAACAAAAAAAAAAJpZAAAAAAABgAAAAEAAAAAAAAACHJlZnVuZGVkAAAACwAAAAAAAAAC",
+        "AAAABQAAAAAAAAAAAAAAD0FyYml0ZXJBcHByb3ZlZAAAAAABAAAAEGFyYml0ZXJfYXBwcm92ZWQAAAACAAAAAAAAAAdhcmJpdGVyAAAAABMAAAABAAAAAAAAAAhieV9hZG1pbgAAAAEAAAAAAAAAAg==",
+        "AAAAAAAAAKtFeHRlbmRzIHRoZSBzdG9yYWdlIGxpZmUgb2YgYSBsZWFzZSBhbmQgaXRzIHJlY29yZHMuIENhbGxhYmxlIGJ5CmFueW9uZSAodGhlIGNvb3JkaW5hdG9yIGRvZXMgaXQpLCBzbyBhIGxvbmcgbGVhc2Ugd2l0aCBubyBhY3Rpdml0eSBpcwpuZXZlciBhcmNoaXZlZCBiZXR3ZWVuIHR3byBwYXltZW50cy4AAAAABGJ1bXAAAAABAAAAAAAAAAJpZAAAAAAABgAAAAA=",
+        "AAAAAAAAALFUZW5hbnQgYWNjZXB0cyB0aGUgdGVybXMgYW5kIGxvY2tzIHRoZSBmaXJzdCByZW50IHBsdXMgdGhlIGd1YXJhbnRlZS4KV2l0aCB0aGUgeWllbGQgb3B0aW9uLCB0aGUgdGVuYW50IGFsc28gbG9ja3MgdGhlIGJ1ZmZlciBhbmQgZXZlcnl0aGluZwpidXQgb25lIG1vbnRoIG9mIHJlbnQgZ29lcyB0byBCbGVuZC4AAAAAAAAEZnVuZAAAAAMAAAAAAAAAAmlkAAAAAAAGAAAAAAAAAAZ0ZW5hbnQAAAAAABMAAAAAAAAADGFjY2VwdF95aWVsZAAAAAEAAAAA",
+        "AAAAAAAAAOhPbmNlIHRoZSBsZWFzZSBpcyBzZXR0bGVkLCBlYWNoIHBhcnR5IHJhdGVzIHRoZSBvdGhlciBmcm9tIDEgdG8gNSwKb25jZS4gT25seSB0aGUgdHdvIHBhcnRpZXMgb2YgYSByZWFsIGxlYXNlIGNhbiByYXRlLCBzbyBzY29yZXMgY2Fubm90CmJlIGJvdWdodCB3aXRob3V0IHNpZ25pbmcgYW5kIGZ1bmRpbmcgYSBsZWFzZSwgYW5kIG5vYm9keSBjYW4gcmF0ZQp3aGlsZSBhIGNsYWltIGlzIHN0aWxsIG9wZW4uAAAABHJhdGUAAAADAAAAAAAAAAJpZAAAAAAABgAAAAAAAAADd2hvAAAAABMAAAAAAAAABXNjb3JlAAAAAAAABAAAAAA=",
+        "AAAAAAAAALhObyBkYW1hZ2UgY2xhaW0gd2l0aGluIHRoZSB3aW5kb3c6IG1vbnRocyBzdGlsbCB1bnBhaWQgZ28gdG8gdGhlCmxhbmRsb3JkLCB0aGVuIHRoZSByZXN0IG9mIHRoZSBndWFyYW50ZWUgYW5kIHRoZSB0ZW5hbnQncyBzaGFyZSBvZiB0aGUKeWllbGQgZ28gYmFjayB0byB0aGUgdGVuYW50LiBDYWxsYWJsZSBieSBhbnlvbmUuAAAAB3JlbGVhc2UAAAAAAQAAAAAAAAACaWQAAAAAAAYAAAAA",
+        "AAAAAAAAAKFBcmJpdGVyIHNwbGl0cyB0aGUgZGlzcHV0ZWQgYW1vdW50IGJldHdlZW4gdGhlIHR3byBwYXJ0aWVzIG9ubHkuIElmCnRoZSBsYW5kbG9yZCBnZXRzIGxlc3MgdGhhbiBoYWxmIG9mIHRoZSBjbGFpbSwgdGhlIGJvbmQgaXMgZm9yZmVpdGVkCnRvIHRoZSBhcmJpdHJhdGlvbiBmdW5kLgAAAAAAAAdyZXNvbHZlAAAAAAIAAAAAAAAAAmlkAAAAAAAGAAAAAAAAAAt0b19sYW5kbG9yZAAAAAALAAAAAA==",
+        "AAAAAAAAAJlUZW5hbnQgYW5zd2VycyBhIGRhbWFnZSBjbGFpbS4gT2ZmZXJpbmcgdGhlIGZ1bGwgYW1vdW50IGFjY2VwdHMgaXQ7CmFueXRoaW5nIGxlc3MgaXMgYSBjb3VudGVyLW9mZmVyIHRoYXQgdGhlIGxhbmRsb3JkIGNhbiBhY2NlcHQgb3IgdGhlCmFyYml0ZXIgc2V0dGxlcy4AAAAAAAAHcmVzcG9uZAAAAAACAAAAAAAAAAJpZAAAAAAABgAAAAAAAAAFb2ZmZXIAAAAAAAALAAAAAA==",
+        "AAAAAAAAAG5UZW5hbnQgcGF5cyB0aGUgbmV4dCBtb250aCBkaXJlY3RseSB0byB0aGUgbGFuZGxvcmQsIGR1cmluZyB0aGUgbGVhc2UKb3IgbGF0ZSwgdW50aWwgdGhlIGd1YXJhbnRlZSBpcyBzZXR0bGVkLgAAAAAACHBheV9yZW50AAAAAQAAAAAAAAACaWQAAAAAAAYAAAAA",
+        "AAAAAAAAAHFFaXRoZXIgcGFydHkgZW5kcyB0aGUgbGVhc2UgYWZ0ZXIgaXRzIHRlcm0gYW5kIG1heSByZWNvcmQgdGhlIGV4aXQKaW52ZW50b3J5IGhhc2guIE9wZW5zIHRoZSBkYW1hZ2UtY2xhaW0gd2luZG93LgAAAAAAAAllbmRfbGVhc2UAAAAAAAADAAAAAAAAAAJpZAAAAAAABgAAAAAAAAADd2hvAAAAABMAAAAAAAAACWV4aXRfaGFzaAAAAAAAA+gAAAPuAAAAIAAAAAA=",
+        "AAAAAAAAAC5UaGUgZGFtYWdlIGNsYWltIG9mIGEgbGVhc2UsIGlmIG9uZSB3YXMgZmlsZWQuAAAAAAAJZ2V0X2NsYWltAAAAAAAAAQAAAAAAAAACaWQAAAAAAAYAAAABAAAD6AAAB9AAAAAFQ2xhaW0AAAA=",
+        "AAAAAAAAAAAAAAAJZ2V0X2xlYXNlAAAAAAAAAQAAAAAAAAACaWQAAAAAAAYAAAABAAAH0AAAAAVMZWFzZQAAAA==",
+        "AAAAAAAAAS1Nb3N0IHRoZSBsYW5kbG9yZCBjYW4gc3RpbGwgY2xhaW0gZm9yIGRhbWFnZSBvbmNlIHRoZSBsZWFzZSBlbmRlZDoKdGhlIGd1YXJhbnRlZSBpdHNlbGYsIG1pbnVzIHRoZSBtb250aHMgYWxyZWFkeSB0YWtlbiBmcm9tIGl0LiBUaGUKdGVuYW50J3MgYnVmZmVyIGFuZCB5aWVsZCBzaGFyZSBhcmUgbmV2ZXIgY2xhaW1hYmxlLgpUYWtlcyBpbnRvIGFjY291bnQgdGhlIEJsZW5kIHBvc2l0aW9uIGFuZCB0aGUgbW9udGhzIHN0aWxsIHVucGFpZCwKd2hpY2ggYGNsYWltX2RhbWFnZWAgcGF5cyB0byB0aGUgbGFuZGxvcmQgZmlyc3QuAAAAAAAACW1heF9jbGFpbQAAAAAAAAEAAAAAAAAAAmlkAAAAAAAGAAAAAQAAAAs=",
+        "AAAAAAAAAOxQdWxscyBhIGxlYXNlJ3MgZ3VhcmFudGVlIG91dCBvZiBCbGVuZC4gVGhlIHRlbmFudCBvciB0aGUgbGFuZGxvcmQgY2FuCmRvIGl0IGF0IGFueSB0aW1lICh0aGUgb3B0aW9uIGlzIHJldmVyc2libGUpLiBBbnlvbmUgZWxzZSwgc3VjaCBhcyB0aGUKY29vcmRpbmF0b3IgYWdlbnQsIG9ubHkgd2hlbiB0aGUgcG9zaXRpb24gbG9zdCB2YWx1ZSBvciB0aGUgcG9vbCBpcwpjbG9zZSB0byBmdWxsIHV0aWxpemF0aW9uLgAAAApleGl0X2JsZW5kAAAAAAACAAAAAAAAAAJpZAAAAAAABgAAAAAAAAAGY2FsbGVyAAAAAAATAAAAAA==",
+        "AAAAAAAAAAAAAAAKZ2V0X2NvbmZpZwAAAAAAAAAAAAEAAAfQAAAABkNvbmZpZwAA",
+        "AAAAAAAAAD9OdW1iZXIgb2YgbWVzc2FnZXMgb24gYSBsZWFzZSBhbmQgdGhlIGhhc2ggb2YgdGhlIHdob2xlIHRocmVhZC4AAAAACmdldF90aHJlYWQAAAAAAAEAAAAAAAAAAmlkAAAAAAAGAAAAAQAAB9AAAAAGVGhyZWFkAAA=",
+        "AAAAAAAAAAAAAAAKaXNfYXJiaXRlcgAAAAAAAQAAAAAAAAADd2hvAAAAABMAAAABAAAAAQ==",
+        "AAAAAAAAAAAAAAALZ2V0X3JhdGluZ3MAAAAAAQAAAAAAAAACaWQAAAAAAAYAAAABAAAH0AAAAAxMZWFzZVJhdGluZ3M=",
+        "AAAAAAAAAAAAAAALbGVhc2VfY291bnQAAAAAAAAAAAEAAAAG",
+        "AAAAAAAAAIRFaXRoZXIgcGFydHkgd2l0aGRyYXdzIGEgcGVuZGluZyBwcm9wb3NhbDsgYSBsb2NrZWQgYnVmZmVyIGdvZXMgYmFjawp0byB0aGUgdGVuYW50LiBPbmNlIHBsYWNlZCwgYGV4aXRfYmxlbmRgIGJyaW5ncyB0aGUgZnVuZHMgYmFjay4AAAAMY2FuY2VsX3lpZWxkAAAAAgAAAAAAAAACaWQAAAAAAAYAAAAAAAAAA3dobwAAAAATAAAAAA==",
+        "AAAAAAAAAMxMYW5kbG9yZCBjbGFpbXMgYGFtb3VudGAgZm9yIGRhbWFnZSwgd2l0aCB0aGUgaGFzaCBvZiB0aGUgZXZpZGVuY2UsCmFuZCBwb3N0cyB0aGUgZGlzcHV0ZSBib25kLiBNb250aHMgc3RpbGwgdW5wYWlkIGFyZSBwYWlkIHRvIHRoZQpsYW5kbG9yZCBmaXJzdDsgdGhlIHVuZGlzcHV0ZWQgcmVzdCBnb2VzIGJhY2sgdG8gdGhlIHRlbmFudCBpbW1lZGlhdGVseS4AAAAMY2xhaW1fZGFtYWdlAAAAAwAAAAAAAAACaWQAAAAAAAYAAAAAAAAABmFtb3VudAAAAAAACwAAAAAAAAAIZXZpZGVuY2UAAAPuAAAAIAAAAAA=",
+        "AAAAAAAAALpQYXlzIGFuIHVucGFpZCBtb250aCB0byB0aGUgbGFuZGxvcmQgZnJvbSB0aGUgZ3VhcmFudGVlIG9uY2UgdGhlIGdyYWNlCnBlcmlvZCBoYXMgcGFzc2VkOiBsaXF1aWQgbW9udGggZmlyc3QsIHRoZW4gQmxlbmQuIENhbGxhYmxlIGJ5IGFueW9uZSwKc2luY2UgdGhlIG1vbmV5IGNhbiBvbmx5IGdvIHRvIHRoZSBsYW5kbG9yZC4AAAAAAAxjbGFpbV91bnBhaWQAAAABAAAAAAAAAAJpZAAAAAAABgAAAAA=",
+        "AAAAAAAAAExMYW5kbG9yZCBwdWJsaXNoZXMgdGhlIHRlcm1zLiBSZXR1cm5zIHRoZSBsZWFzZSBpZCB0byBzaGFyZSB3aXRoIHRoZSB0ZW5hbnQuAAAADGNyZWF0ZV9sZWFzZQAAAAIAAAAAAAAACGxhbmRsb3JkAAAAEwAAAAAAAAAFdGVybXMAAAAAAAfQAAAABVRlcm1zAAAAAAAAAQAAAAY=",
+        "AAAAAAAAAAAAAAAMZ2V0X2FyYml0ZXJzAAAAAAAAAAEAAAPqAAAAEw==",
+        "AAAAAAAAAQtTZW5kcyBhIG1lc3NhZ2UgdG8gdGhlIG90aGVyIHBhcnR5IG9mIGEgbGVhc2UsIG9uY2UgdGhlIHRlbmFudCBpcwprbm93bi4gVGhlIGFwcCBlbmNyeXB0cyBpdCBmb3IgdGhlIHR3byBwYXJ0aWVzIGJlZm9yZSBpdCBnZXRzIGhlcmUsIHNvCnRoZSBjb250cmFjdCBvbmx5IGNoZWNrcyB3aG8gc2VuZHMgaXQgYW5kIGNoYWlucyBpdCBpbnRvIHRoZSB0aHJlYWQKaGFzaC4gSXQgbW92ZXMgbm8gbW9uZXkgYW5kIGNoYW5nZXMgbm90aGluZyBlbHNlIG9uIHRoZSBsZWFzZS4AAAAADHNlbmRfbWVzc2FnZQAAAAMAAAAAAAAAAmlkAAAAAAAGAAAAAAAAAARmcm9tAAAAEwAAAAAAAAAHcGF5bG9hZAAAAAAOAAAAAQAAB9AAAAAGVGhyZWFkAAA=",
+        "AAAAAAAAAAAAAAANX19jb25zdHJ1Y3RvcgAAAAAAAAsAAAAAAAAABXRva2VuAAAAAAAAEwAAAAAAAAAEcG9vbAAAABMAAAAAAAAAEGFyYml0cmF0aW9uX2Z1bmQAAAATAAAAAAAAAAxkaXNwdXRlX2JvbmQAAAALAAAAAAAAABJtaW5fcmF0ZWRfZHVyYXRpb24AAAAAAAYAAAAAAAAAEW1pbl9yYXRlZF9kZXBvc2l0AAAAAAAACwAAAAAAAAAFYWRtaW4AAAAAAAATAAAAAAAAAA1vcGVuX3JlZ2lzdHJ5AAAAAAAAAQAAAAAAAAAKbWluX3dpbmRvdwAAAAAABgAAAAAAAAAKbWF4X3dpbmRvdwAAAAAABgAAAAAAAAAIYXJiaXRlcnMAAAPqAAAAEwAAAAA=",
+        "AAAAAAAAAI5UaGUgb3RoZXIgcGFydHkgYXBwcm92ZXMgdGhlIHBlbmRpbmcgcHJvcG9zYWwuIFRoZSBzZWNvbmQgYXBwcm92YWwKcGxhY2VzIGBsaXF1aWQgLSBrZWVwYCBvbiBCbGVuZDsgdGhlIHRlbmFudCdzIGJ1ZmZlciBqb2lucyB0aGUgbGlxdWlkIHBhcnQuAAAAAAANYXBwcm92ZV95aWVsZAAAAAAAAAIAAAAAAAAAAmlkAAAAAAAGAAAAAAAAAAN3aG8AAAAAEwAAAAA=",
+        "AAAAAAAAADZUcnVlIHdoZW4gYW55b25lIG1heSBjYWxsIGBleGl0X2JsZW5kYCBmb3IgdGhpcyBsZWFzZS4AAAAAAA1ibGVuZF9hdF9yaXNrAAAAAAAAAQAAAAAAAAACaWQAAAAAAAYAAAABAAAAAQ==",
+        "AAAAAAAAAFVUZW5hbnQgc3RheWVkIHNpbGVudCBwYXN0IHRoZSByZXNwb25zZSB3aW5kb3c6IHRoZSBjbGFpbSBpcyBwYWlkLgpDYWxsYWJsZSBieSBhbnlvbmUuAAAAAAAADWV4ZWN1dGVfY2xhaW0AAAAAAAABAAAAAAAAAAJpZAAAAAAABgAAAAA=",
+        "AAAAAAAAAMpBIHBhcnR5IHByb3Bvc2VzIHRvIGxlbmQgcGFydCBvZiB0aGUgZ3VhcmFudGVlIG9uIEJsZW5kIHdoaWxlIHRoZQpsZWFzZSBydW5zLiBga2VlcGAgc3RheXMgbGlxdWlkIGluIHRoZSBjb250cmFjdCBhbmQgbXVzdCBjb3ZlciBhdApsZWFzdCBvbmUgbW9udGggb2YgcmVudC4gTm90aGluZyBtb3ZlcyB1bnRpbCB0aGUgb3RoZXIgcGFydHkgYXBwcm92ZXMuAAAAAAANcHJvcG9zZV95aWVsZAAAAAAAAAUAAAAAAAAAAmlkAAAAAAAGAAAAAAAAAAN3aG8AAAAAEwAAAAAAAAAEa2VlcAAAAAsAAAAAAAAAEHRlbmFudF9zaGFyZV9icHMAAAAEAAAAAAAAABJsYW5kbG9yZF9zaGFyZV9icHMAAAAAAAQAAAAA",
+        "AAAAAAAAACxMYW5kbG9yZCBhY2NlcHRzIHRoZSB0ZW5hbnQncyBjb3VudGVyLW9mZmVyLgAAAA5hY2NlcHRfY291bnRlcgAAAAAAAQAAAAAAAAACaWQAAAAAAAYAAAAA",
+        "AAAAAAAAAVhUaGUgYXJiaXRlciBkaWQgbm90IGRlY2lkZSB3aXRoaW4gdGhlIGFyYml0cmF0aW9uIHdpbmRvdzogdGhlIGRpc3B1dGUKaXMgc2V0dGxlZCBhdCB0aGUgdGVuYW50J3Mgb2ZmZXIsIHNpbmNlIHRoZSBjbGFpbWFudCBjYXJyaWVzIHRoZSBidXJkZW4Kb2YgcHJvb2YgYW5kIHRoZSBndWFyYW50ZWUgY29tZXMgYmFjayBieSBkZWZhdWx0LiBBIGhhbGZ3YXkgc3BsaXQKd291bGQgcmV3YXJkIGluZmxhdGVkIGNsYWltcy4gVGhlIGJvbmQgZ29lcyBiYWNrIHRvIHRoZSBsYW5kbG9yZDogdGhlCmFyYml0ZXIncyBzaWxlbmNlIGlzIG5vdCB0aGUgbGFuZGxvcmQncyBmYXVsdC4gQ2FsbGFibGUgYnkgYW55b25lLgAAAA5leHBpcmVfZGlzcHV0ZQAAAAAAAQAAAAAAAAACaWQAAAAAAAYAAAAA",
+        "AAAAAAAAAERTY29yZXMgcmVjZWl2ZWQgYnkgYHdob2AgYWNyb3NzIGFsbCBsZWFzZXM6IGF2ZXJhZ2UgPSB0b3RhbCAvIGNvdW50LgAAAA5nZXRfcmVwdXRhdGlvbgAAAAAAAQAAAAAAAAADd2hvAAAAABMAAAABAAAH0AAAAApSZXB1dGF0aW9uAAA=",
+        "AAAAAAAAAGhNb3ZlLWluIGRlYWRsaW5lIHBhc3NlZCB3aXRob3V0IGJvdGggY29uZmlybWF0aW9uczogdGhlIHRlbmFudCBnZXRzCmV2ZXJ5dGhpbmcgYmFjay4gQ2FsbGFibGUgYnkgYW55b25lLgAAAA5yZWZ1bmRfbm9fa2V5cwAAAAAAAQAAAAAAAAACaWQAAAAAAAYAAAAA",
+        "AAAAAAAAAHRUaGUgYWRtaW4gcmVtb3ZlcyBhIG1lZGlhdG9yLiBMZWFzZXMgYWxyZWFkeSBmdW5kZWQga2VlcCB0aGVpcnM7IG5ldwpsZWFzZXMgYW5kIHBlbmRpbmcgb2ZmZXJzIGNhbiBubyBsb25nZXIgdXNlIGl0LgAAAA5yZXZva2VfYXJiaXRlcgAAAAAAAQAAAAAAAAAHYXJiaXRlcgAAAAATAAAAAA==",
+        "AAAAAAAAAEJUaGUgYWRtaW4gYXBwcm92ZXMgYSBtZWRpYXRvci4gTGVhc2VzIGNhbiBvbmx5IG5hbWUgYXBwcm92ZWQgb25lcy4AAAAAAA9hcHByb3ZlX2FyYml0ZXIAAAAAAQAAAAAAAAAHYXJiaXRlcgAAAAATAAAAAA==",
+        "AAAAAAAAAINCb3RoIHBhcnRpZXMgY28tc2lnbiB0aGUgaGFzaCBvZiB0aGUgbW92ZS1pbiBpbnZlbnRvcnkuIFRoZSBzZWNvbmQKc2lnbmF0dXJlIG11c3QgbWF0Y2ggdGhlIGZpcnN0OyBpdCB0aGVuIHJlbGVhc2VzIHRoZSBmaXJzdCByZW50LgAAAAAPY29uZmlybV9tb3ZlX2luAAAAAAMAAAAAAAAAAmlkAAAAAAAGAAAAAAAAAAN3aG8AAAAAEwAAAAAAAAAKZW50cnlfaGFzaAAAAAAD7gAAACAAAAAA",
+        "AAAAAAAAAEhDdXJyZW50IHZhbHVlIG9mIHRoZSBsZWFzZSdzIGd1YXJhbnRlZTogbGlxdWlkIHBhcnQgcGx1cyBCbGVuZCBwb3NpdGlvbi4AAAAPZ3VhcmFudGVlX3ZhbHVlAAAAAAEAAAAAAAAAAmlkAAAAAAAGAAAAAQAAAAs=",
+        "AAAAAAAAAH9UZXN0bmV0IG9ubHk6IGEgbWVkaWF0b3Igam9pbnMgdGhlIHJlZ2lzdHJ5IGJ5IHNpZ25pbmcuIFJlZnVzZWQgd2hlbgp0aGUgcmVnaXN0cnkgaXMgY3VyYXRlZCAoYG9wZW5fcmVnaXN0cnlgIGZhbHNlIGF0IGRlcGxveSkuAAAAABByZWdpc3Rlcl9hcmJpdGVyAAAAAQAAAAAAAAAHYXJiaXRlcgAAAAATAAAAAA==",
+        "AAAAAAAAAFlEZWNpc2lvbnMgbWFkZSBieSBhbiBhcmJpdGVyOiBudW1iZXIgb2YgY2FzZXMsIHRvdGFsIGNsYWltZWQsIHRvdGFsCmF3YXJkZWQgdG8gbGFuZGxvcmRzLgAAAAAAABJnZXRfYXJiaXRlcl9yZWNvcmQAAAAAAAEAAAAAAAAAA3dobwAAAAATAAAAAQAAB9AAAAANQXJiaXRlclJlY29yZAAAAA==",
+        "AAAAAAAAAAAAAAASZ2V0X3lpZWxkX3Byb3Bvc2FsAAAAAAABAAAAAAAAAAJpZAAAAAAABgAAAAEAAAPoAAAH0AAAAA1ZaWVsZFByb3Bvc2FsAAAA",
+        "AAAAAQAAAAAAAAAAAAAAB1JlcXVlc3QAAAAAAwAAAAAAAAAHYWRkcmVzcwAAAAATAAAAAAAAAAZhbW91bnQAAAAAAAsAAAAAAAAADHJlcXVlc3RfdHlwZQAAAAQ=",
+        "AAAAAQAAAAAAAAAAAAAAB1Jlc2VydmUAAAAABAAAAAAAAAAFYXNzZXQAAAAAAAATAAAAAAAAAAZjb25maWcAAAAAB9AAAAANUmVzZXJ2ZUNvbmZpZwAAAAAAAAAAAAAEZGF0YQAAB9AAAAALUmVzZXJ2ZURhdGEAAAAAAAAAAAZzY2FsYXIAAAAAAAs=",
+        "AAAAAQAAAAAAAAAAAAAACVBvc2l0aW9ucwAAAAAAAAMAAAAAAAAACmNvbGxhdGVyYWwAAAAAA+wAAAAEAAAACwAAAAAAAAALbGlhYmlsaXRpZXMAAAAD7AAAAAQAAAALAAAAAAAAAAZzdXBwbHkAAAAAA+wAAAAEAAAACw==",
+        "AAAAAQAAAAAAAAAAAAAAC1Jlc2VydmVEYXRhAAAAAAcAAAAAAAAABmJfcmF0ZQAAAAAACwAAAAAAAAAIYl9zdXBwbHkAAAALAAAAAAAAAA9iYWNrc3RvcF9jcmVkaXQAAAAACwAAAAAAAAAGZF9yYXRlAAAAAAALAAAAAAAAAAhkX3N1cHBseQAAAAsAAAAAAAAABmlyX21vZAAAAAAACwAAAAAAAAAJbGFzdF90aW1lAAAAAAAABg==",
+        "AAAAAQAAAAAAAAAAAAAADVJlc2VydmVDb25maWcAAAAAAAANAAAAAAAAAAhjX2ZhY3RvcgAAAAQAAAAAAAAACGRlY2ltYWxzAAAABAAAAAAAAAAHZW5hYmxlZAAAAAABAAAAAAAAAAVpbmRleAAAAAAAAAQAAAAAAAAACGxfZmFjdG9yAAAABAAAAAAAAAAIbWF4X3V0aWwAAAAEAAAAAAAAAAZyX2Jhc2UAAAAAAAQAAAAAAAAABXJfb25lAAAAAAAABAAAAAAAAAAHcl90aHJlZQAAAAAEAAAAAAAAAAVyX3R3bwAAAAAAAAQAAAAAAAAACnJlYWN0aXZpdHkAAAAAAAQAAAAAAAAACnN1cHBseV9jYXAAAAAAAAsAAAAAAAAABHV0aWwAAAAE",
+        "AAAAAQAAAAAAAAAAAAAABUNsYWltAAAAAAAABgAAAAAAAAAGYW1vdW50AAAAAAALAAAAQ1doZW4gdGhlIHRlbmFudCBjb3VudGVyZWQgKDAgYmVmb3JlKTogb3BlbnMgdGhlIGFyYml0cmF0aW9uIHdpbmRvdy4AAAAAC2Fuc3dlcmVkX2F0AAAAAAYAAAAAAAAABGJvbmQAAAALAAAAAAAAAAhldmlkZW5jZQAAA+4AAAAgAAAAAAAAAAhmaWxlZF9hdAAAAAYAAAAkVGVuYW50IGNvdW50ZXItb2ZmZXIsIG9uY2UgYW5zd2VyZWQuAAAABW9mZmVyAAAAAAAD6AAAAAs=",
+        "AAAABAAAAAAAAAAAAAAABUVycm9yAAAAAAAAEQAAAAAAAAANTGVhc2VOb3RGb3VuZAAAAAAAAAEAAAAAAAAADEludmFsaWRUZXJtcwAAAAIAAAAAAAAAC1dyb25nU3RhdHVzAAAAAAMAAAAAAAAACU5vdEFQYXJ0eQAAAAAAAAQAAAAAAAAADkRlYWRsaW5lUGFzc2VkAAAAAAAFAAAAAAAAAAhUb29FYXJseQAAAAYAAAAAAAAADEhhc2hNaXNtYXRjaAAAAAcAAAAAAAAADUludmFsaWRBbW91bnQAAAAAAAAIAAAAAAAAAApOb3RoaW5nRHVlAAAAAAAJAAAAAAAAAAtCbGVuZElzU2FmZQAAAAAKAAAAAAAAAAlTYW1lUGFydHkAAAAAAAALAAAAAAAAABBBbHJlYWR5Q29uZmlybWVkAAAADAAAAAAAAAAMQWxyZWFkeVJhdGVkAAAADQAAAAAAAAAMSW52YWxpZFNjb3JlAAAADgAAAD9UaGUgYXJiaXRlciBuYW1lZCBpbiB0aGUgdGVybXMgaXMgbm90IGluIHRoZSBtZWRpYXRvciByZWdpc3RyeS4AAAAAEkFyYml0ZXJOb3RBcHByb3ZlZAAAAAAADwAAADxTZWxmLXJlZ2lzdHJhdGlvbiBpcyBvZmY6IG9ubHkgdGhlIGFkbWluIGFwcHJvdmVzIG1lZGlhdG9ycy4AAAAOUmVnaXN0cnlDbG9zZWQAAAAAABAAAAAuQSBtZXNzYWdlIGlzIGVtcHR5IG9yIGxvbmdlciB0aGFuIDEsMDI0IGJ5dGVzLgAAAAAADkludmFsaWRNZXNzYWdlAAAAAAAR",
+        "AAAAAQAAAAAAAAAAAAAABUxlYXNlAAAAAAAAEgAAAAAAAAAKY3JlYXRlZF9hdAAAAAAABgAAAAAAAAAIZW5kZWRfYXQAAAAGAAAAAAAAAAplbnRyeV9oYXNoAAAAAAPoAAAD7gAAACAAAAAAAAAACWV4aXRfaGFzaAAAAAAAA+gAAAPuAAAAIAAAAAAAAAAIbGFuZGxvcmQAAAATAAAAAAAAABFsYW5kbG9yZF9tb3ZlZF9pbgAAAAAAAAEAAAA1R3VhcmFudGVlIHRva2VucyBoZWxkIGJ5IHRoaXMgY29udHJhY3QgZm9yIHRoZSBsZWFzZS4AAAAAAAAGbGlxdWlkAAAAAAALAAAAZE1vbnRocyBwYWlkIGJ5IHRoZSB0ZW5hbnQgb3IgdGFrZW4gZnJvbSB0aGUgZ3VhcmFudGVlLiBNb250aCAwIGlzIHRoZQpmaXJzdCByZW50LCBsb2NrZWQgYXQgZnVuZGluZy4AAAAObW9udGhzX3NldHRsZWQAAAAAAAQAAAAxTW9udGhzIHRha2VuIGZyb20gdGhlIGd1YXJhbnRlZSBmb3IgdGhlIGxhbmRsb3JkLgAAAAAAAA1tb250aHNfdW5wYWlkAAAAAAAABAAAACBQcmluY2lwYWwgc3RpbGwgcGxhY2VkIG9uIEJsZW5kLgAAAAZwbGFjZWQAAAAAAAsAAAApRmlyc3QgbW9udGggb2YgcmVudCwgcmVsZWFzZWQgYXQgbW92ZS1pbi4AAAAAAAALcmVudF9lc2Nyb3cAAAAACwAAACdCbGVuZCBiLXRva2VucyBhdHRyaWJ1dGVkIHRvIHRoZSBsZWFzZS4AAAAABnNoYXJlcwAAAAAACwAAADdNb3ZlLWluIHRpbWU7IG1vbnRoIGBtYCBpcyBkdWUgYXQgYHN0YXJ0ICsgbSAqIHBlcmlvZGAuAAAAAAVzdGFydAAAAAAAAAYAAAAAAAAABnN0YXR1cwAAAAAH0AAAAAZTdGF0dXMAAAAAAAAAAAAGdGVuYW50AAAAAAPoAAAAEwAAAAAAAAAPdGVuYW50X21vdmVkX2luAAAAAAEAAAAAAAAABXRlcm1zAAAAAAAH0AAAAAVUZXJtcwAAAAAAAAAAAAAMeWllbGRfYWN0aXZlAAAAAQ==",
+        "AAAAAQAAAIxGaXhlZCBieSB0aGUgbGFuZGxvcmQgYXQgY3JlYXRpb24gYW5kIGFjY2VwdGVkIGJ5IHRoZSB0ZW5hbnQgd2hlbiBmdW5kaW5nLgpEdXJhdGlvbnMgYXJlIGluIHNlY29uZHMgc28gdGhlIGRlbW8gY2FuIHJ1biB3aXRoIDEgbW9udGggPSA2MCBzLgAAAAAAAAAFVGVybXMAAAAAAAAOAAAAAAAAAAdhcmJpdGVyAAAAABMAAADBVGltZSB0aGUgYXJiaXRlciBoYXMgdG8gZGVjaWRlIG9uY2UgdGhlIHRlbmFudCBjb3VudGVyZWQuIFBhc3QgaXQsCmFueW9uZSBjYW4gc2V0dGxlIHRoZSBkaXNwdXRlIGF0IHRoZSB0ZW5hbnQncyBvZmZlcjogdGhlIGd1YXJhbnRlZQpjb21lcyBiYWNrIGJ5IGRlZmF1bHQsIGFuZCBpbmZsYXRpbmcgYSBjbGFpbSBlYXJucyBub3RoaW5nLgAAAAAAABJhcmJpdHJhdGlvbl93aW5kb3cAAAAAAAYAAACBRXh0cmEgdGhlIHRlbmFudCBsb2NrcyB3aGVuIHRoZSB5aWVsZCBvcHRpb24gaXMgb24sIGluIGJhc2lzIHBvaW50cwpvZiB0aGUgZGVwb3NpdC4gSXQgYWJzb3JicyBhIEJsZW5kIGxvc3MgYmVmb3JlIGFueXRoaW5nIGVsc2UuAAAAAAAACmJ1ZmZlcl9icHMAAAAAAAQAAAA3VGltZSBhZnRlciB0aGUgZW5kIG9mIHRoZSBsZWFzZSB0byBmaWxlIGEgZGFtYWdlIGNsYWltLgAAAAAMY2xhaW1fd2luZG93AAAABgAAACZHdWFyYW50ZWUsIGF0IGxlYXN0IG9uZSBtb250aCBvZiByZW50LgAAAAAAB2RlcG9zaXQAAAAACwAAAD1EZWxheSBhZnRlciBhIGR1ZSBkYXRlIGJlZm9yZSBhbiB1bnBhaWQgbW9udGggY2FuIGJlIGNsYWltZWQuAAAAAAAABWdyYWNlAAAAAAAABgAAAAAAAAASbGFuZGxvcmRfc2hhcmVfYnBzAAAAAAAEAAAAAAAAAAZtb250aHMAAAAAAAQAAAAwVGltZSBhZnRlciBjcmVhdGlvbiB0byBmdW5kIGFuZCBjb25maXJtIG1vdmUtaW4uAAAADm1vdmVfaW5fd2luZG93AAAAAAAGAAAAG0xlbmd0aCBvZiBvbmUgcmVudGFsIG1vbnRoLgAAAAAGcGVyaW9kAAAAAAAGAAAAAAAAAARyZW50AAAACwAAAC1UaW1lIHRoZSB0ZW5hbnQgaGFzIHRvIGFuc3dlciBhIGRhbWFnZSBjbGFpbS4AAAAAAAAPcmVzcG9uc2Vfd2luZG93AAAAAAYAAAAwWWllbGQgc3BsaXQ7IHRoZSBhcmJpdHJhdGlvbiBmdW5kIGdldHMgdGhlIHJlc3QuAAAAEHRlbmFudF9zaGFyZV9icHMAAAAEAAAAMExhbmRsb3JkIG9mZmVycyB0byBwbGFjZSB0aGUgZ3VhcmFudGVlIG9uIEJsZW5kLgAAAA15aWVsZF9vZmZlcmVkAAAAAAAAAQ==",
+        "AAAAAQAAAHhTZXQgb25jZSBieSB0aGUgY29uc3RydWN0b3IuIFRoZSBwb29sIGNhbm5vdCBiZSBjaGFuZ2VkIGFmdGVyd2FyZHM6Cm5vYm9keSBjYW4gcmVkaXJlY3QgYSBndWFyYW50ZWUgdG8gYW5vdGhlciBwcm90b2NvbC4AAAAAAAAABkNvbmZpZwAAAAAACwAAAEBDdXJhdGVzIHRoZSBtZWRpYXRvciByZWdpc3RyeSAodGhlIGFyYml0cmF0aW9uIGZ1bmQncyBvcGVyYXRvcikuAAAABWFkbWluAAAAAAAAEwAAADxSZWNlaXZlcyBpdHMgc2hhcmUgb2YgdGhlIHlpZWxkIGFuZCBmb3JmZWl0ZWQgZGlzcHV0ZSBib25kcy4AAAAQYXJiaXRyYXRpb25fZnVuZAAAABMAAAAsQm9uZCB0aGUgbGFuZGxvcmQgcG9zdHMgd2l0aCBhIGRhbWFnZSBjbGFpbS4AAAAMZGlzcHV0ZV9ib25kAAAACwAAAEUuLi4gYW5kIGF0IG1vc3QgdGhpcyBsb25nLCBzbyBubyB3aW5kb3cgY2FuIGxvY2sgYSBndWFyYW50ZWUgZm9yZXZlci4AAAAAAAAKbWF4X3dpbmRvdwAAAAAABgAAAHUuLi4gYW5kIGhlbGQgYXQgbGVhc3QgdGhpcyBndWFyYW50ZWUuIEJlbG93IGVpdGhlciwgZmFraW5nIGEgZ29vZApyZXB1dGF0aW9uIHdpdGggYSBzZWNvbmQgd2FsbGV0IHdvdWxkIGNvc3Qgbm90aGluZy4AAAAAAAARbWluX3JhdGVkX2RlcG9zaXQAAAAAAAALAAAAbkEgcmF0aW5nIG9ubHkgY291bnRzIHRvd2FyZHMgcmVwdXRhdGlvbiBpZiB0aGUgbGVhc2UgbGFzdGVkIGF0IGxlYXN0CnRoaXMgbG9uZyAobW9udGhzIMOXIHBlcmlvZCwgc2Vjb25kcykgLi4uAAAAAAASbWluX3JhdGVkX2R1cmF0aW9uAAAAAAAGAAAAxEV2ZXJ5IGxlYXNlIHdpbmRvdyAobW92ZS1pbiwgY2xhaW0sIHJlc3BvbnNlLCBhcmJpdHJhdGlvbikgYW5kIHRoZQpyZW50YWwgcGVyaW9kIG11c3QgbGFzdCBhdCBsZWFzdCB0aGlzIGxvbmcsIHNvIG5vIGxlYXNlIGNhbiBsZWF2ZSB0aGUKdGVuYW50IG5vIHRpbWUgdG8gYW5zd2VyIChkZW1vIGRlcGxveW1lbnRzIHVzZSBzZWNvbmRzKSAuLi4AAAAKbWluX3dpbmRvdwAAAAAABgAAAIlUZXN0bmV0IG9ubHk6IGFueW9uZSBjYW4gam9pbiB0aGUgcmVnaXN0cnkgYnkgc2lnbmluZywgc28ganVkZ2VzIGNhbgpwbGF5IHRoZSBtZWRpYXRvci4gT24gbWFpbm5ldCBpdCBpcyBmYWxzZSBhbmQgb25seSBgYWRtaW5gIGFwcHJvdmVzLgAAAAAAAA1vcGVuX3JlZ2lzdHJ5AAAAAAAAAQAAACJUaGUgc2luZ2xlIHdoaXRlbGlzdGVkIEJsZW5kIHBvb2wuAAAAAAAEcG9vbAAAABMAAAAsSW5kZXggb2YgYHRva2VuYCBpbiB0aGUgcG9vbCdzIHJlc2VydmUgbGlzdC4AAAANcmVzZXJ2ZV9pbmRleAAAAAAAAAQAAAA2U3RhYmxlY29pbiB1c2VkIGZvciByZW50IGFuZCBndWFyYW50ZWVzIChTQUMgYWRkcmVzcykuAAAAAAAFdG9rZW4AAAAAAAAT",
+        "AAAAAgAAAAAAAAAAAAAABlN0YXR1cwAAAAAACAAAAAAAAAAfV2FpdGluZyBmb3IgdGhlIHRlbmFudCB0byBmdW5kLgAAAAAHQ3JlYXRlZAAAAAAAAAAANEZ1bmRlZCwgd2FpdGluZyBmb3IgYm90aCBwYXJ0aWVzIHRvIGNvbmZpcm0gbW92ZS1pbi4AAAAGRnVuZGVkAAAAAAAAAAAAAAAAAAZBY3RpdmUAAAAAAAAAAAAlTGVhc2Ugb3ZlciwgZGFtYWdlLWNsYWltIHdpbmRvdyBvcGVuLgAAAAAAAAVFbmRlZAAAAAAAAAAAAAArRGFtYWdlIGNsYWltIGZpbGVkLCB3YWl0aW5nIGZvciB0aGUgdGVuYW50LgAAAAAHQ2xhaW1lZAAAAAAAAAAAQVRlbmFudCBjb3VudGVyZWQ7IHRoZSBsYW5kbG9yZCBjYW4gYWNjZXB0IG9yIHRoZSBhcmJpdGVyIGRlY2lkZXMuAAAAAAAACERpc3B1dGVkAAAAAAAAAAAAAAAGQ2xvc2VkAAAAAAAAAAAAO01vdmUtaW4gbmV2ZXIgaGFwcGVuZWQsIGV2ZXJ5dGhpbmcgd2VudCBiYWNrIHRvIHRoZSB0ZW5hbnQuAAAAAAhSZWZ1bmRlZA==",
+        "AAAAAQAAAM1UaGUgbWVzc2FnZSB0aHJlYWQgb2YgYSBsZWFzZS4gTWVzc2FnZXMgdGhlbXNlbHZlcyBhcmUgb25seSBpbiBldmVudHMsCmVuY3J5cHRlZCBmb3IgdGhlIHR3byBwYXJ0aWVzOyB0aGUgY29udHJhY3Qga2VlcHMgdGhlaXIgbnVtYmVyIGFuZCBhCnJ1bm5pbmcgaGFzaCwgc28gbm9ib2R5IGNhbiBkcm9wIG9yIHJld3JpdGUgYSBtZXNzYWdlIGFmdGVyd2FyZHMuAAAAAAAAAAAAAAZUaHJlYWQAAAAAAAIAAAAAAAAABWNvdW50AAAAAAAABAAAAENzaGEyNTYocHJldmlvdXMgaGFzaCB8fCBzZW5kZXIgfHwgc2VxIHx8IHBheWxvYWQpLCB6ZXJvIHdoZW4gZW1wdHkuAAAAAARoYXNoAAAD7gAAACA=",
+        "AAAAAgAAAAAAAAAAAAAAB0RhdGFLZXkAAAAADAAAAAAAAAAAAAAABkNvbmZpZwAAAAAAAAAAAAAAAAAGTmV4dElkAAAAAAABAAAAAAAAAAVMZWFzZQAAAAAAAAEAAAAGAAAAAQAAAAAAAAAFQ2xhaW0AAAAAAAABAAAABgAAAAEAAABCUGVuZGluZyBwcm9wb3NhbCB0byBwbGFjZSB0aGUgZ3VhcmFudGVlIG9uIEJsZW5kIGR1cmluZyB0aGUgbGVhc2UuAAAAAAANWWllbGRQcm9wb3NhbAAAAAAAAAEAAAAGAAAAAQAAADNTY29yZXMgdGhlIHR3byBwYXJ0aWVzIGdhdmUgZWFjaCBvdGhlciBmb3IgYSBsZWFzZS4AAAAAB1JhdGluZ3MAAAAAAQAAAAYAAAABAAAANVJ1bm5pbmcgcmVwdXRhdGlvbiBvZiBhbiBhZGRyZXNzLCBhY3Jvc3MgZXZlcnkgbGVhc2UuAAAAAAAAClJlcHV0YXRpb24AAAAAAAEAAAATAAAAAQAAAENTZXQgb25jZSAocmF0ZWUsIHJhdGVyKSBoYXMgY291bnRlZCB0b3dhcmRzIHRoZSByYXRlZSdzIHJlcHV0YXRpb24uAAAAAAdSYXRlZEJ5AAAAAAIAAAATAAAAEwAAAAEAAABEVGhlIHRlbmFudCdzIHlpZWxkIGJ1ZmZlciBpcyBhbHJlYWR5IGluIHRoZSBjb250cmFjdCBmb3IgdGhpcyBsZWFzZS4AAAAMQnVmZmVyTG9ja2VkAAAAAQAAAAYAAAAAAAAALUFwcHJvdmVkIG1lZGlhdG9ycywgaW4gdGhlIG9yZGVyIHRoZXkgam9pbmVkLgAAAAAAAAhBcmJpdGVycwAAAAEAAAAnVHJhY2sgcmVjb3JkIG9mIGFuIGFyYml0ZXIncyBkZWNpc2lvbnMuAAAAAA1BcmJpdGVyUmVjb3JkAAAAAAAAAQAAABMAAAABAAAAMk1lc3NhZ2UgdGhyZWFkIGJldHdlZW4gdGhlIHR3byBwYXJ0aWVzIG9mIGEgbGVhc2UuAAAAAAAGVGhyZWFkAAAAAAABAAAABg==",
+        "AAAAAQAAAERTY29yZXMgYW4gYWRkcmVzcyByZWNlaXZlZCBvbiBsZWFzZXMgdGhhdCBtZXQgdGhlIHJhdGluZyB0aHJlc2hvbGRzLgAAAAAAAAAKUmVwdXRhdGlvbgAAAAAABAAAAAAAAAAFY291bnQAAAAAAAAEAAAAQ0RpZmZlcmVudCBhZGRyZXNzZXMgdGhhdCByYXRlZCBpdDogZml2ZSBzdGFycyBmcm9tIG9uZSBmcmllbmQgc2hvdy4AAAAADmNvdW50ZXJwYXJ0aWVzAAAAAAAEAAAAL1RvdGFsIGR1cmF0aW9uIG9mIHRoZSByYXRlZCBsZWFzZXMsIGluIHNlY29uZHMuAAAAAA1sZWFzZV9zZWNvbmRzAAAAAAAABgAAAAAAAAAFdG90YWwAAAAAAAAE",
+        "AAAAAQAAAERTY29yZXMgKDEgdG8gNSkgdGhlIHBhcnRpZXMgZ2F2ZSBlYWNoIG90aGVyIG9uY2UgdGhlIGxlYXNlIHdhcyBvdmVyLgAAAAAAAAAMTGVhc2VSYXRpbmdzAAAAAgAAACNTY29yZSB0aGUgbGFuZGxvcmQgZ2F2ZSB0aGUgdGVuYW50LgAAAAALYnlfbGFuZGxvcmQAAAAD6AAAAAQAAAAjU2NvcmUgdGhlIHRlbmFudCBnYXZlIHRoZSBsYW5kbG9yZC4AAAAACWJ5X3RlbmFudAAAAAAAA+gAAAAE",
+        "AAAAAQAAAIVFdmVyeSBkZWNpc2lvbiBhbiBhcmJpdGVyIG1hZGUsIHNvIGEgdGVuYW50IGNhbiBzZWUgYmVmb3JlIGZ1bmRpbmcgd2hldGhlcgp0aGUgYXJiaXRlciBuYW1lZCBpbiBhIGxlYXNlIHRlbmRzIHRvIHNpZGUgd2l0aCBsYW5kbG9yZHMuAAAAAAAAAAAAAA1BcmJpdGVyUmVjb3JkAAAAAAAAAwAAAAAAAAAFY2FzZXMAAAAAAAAEAAAAL1N1bSBvZiB0aGUgZGlzcHV0ZWQgY2xhaW1zIHRoZSBhcmJpdGVyIGRlY2lkZWQuAAAAAAdjbGFpbWVkAAAAAAsAAABBU3VtIG9mIHdoYXQgdGhlIGFyYml0ZXIgYXdhcmRlZCB0byBsYW5kbG9yZHMgb3V0IG9mIHRob3NlIGNsYWltcy4AAAAAAAALdG9fbGFuZGxvcmQAAAAACw==",
+        "AAAAAQAAANdQcm9wb3NhbCB0byBsZW5kIHRoZSBndWFyYW50ZWUgb24gQmxlbmQgb25jZSB0aGUgbGVhc2UgaXMgcnVubmluZy4gSXQKb25seSBleGVjdXRlcyB3aGVuIGJvdGggcGFydGllcyBoYXZlIGFwcHJvdmVkIGl0LiBUaGUgdGVuYW50J3MgYnVmZmVyIGlzCmxvY2tlZCB3aGVuIHRoZSB0ZW5hbnQgYXBwcm92ZXMgYW5kIHJlZnVuZGVkIGlmIHRoZSBwcm9wb3NhbCBpcyBkcm9wcGVkLgAAAAAAAAAADVlpZWxkUHJvcG9zYWwAAAAAAAAHAAAARkJ1ZmZlciB0aGUgdGVuYW50IGxvY2tzIG9uIGFwcHJvdmFsICh0ZXJtcy5idWZmZXJfYnBzIG9mIHRoZSBkZXBvc2l0KS4AAAAAAAZidWZmZXIAAAAAAAsAAABIUGFydCBvZiB0aGUgZ3VhcmFudGVlIHRoYXQgc3RheXMgbGlxdWlkIGluIHRoZSBjb250cmFjdCAo4omlIG9uZSBtb250aCkuAAAABGtlZXAAAAALAAAAAAAAAAtsYW5kbG9yZF9vawAAAAABAAAAAAAAABJsYW5kbG9yZF9zaGFyZV9icHMAAAAAAAQAAAAAAAAACHByb3Bvc2VyAAAAEwAAAAAAAAAJdGVuYW50X29rAAAAAAAAAQAAAAAAAAAQdGVuYW50X3NoYXJlX2JwcwAAAAQ=" ]),
+      options
+    )
+  }
+  public readonly fromJSON = {
+    bump: this.txFromJSON<null>,
+        fund: this.txFromJSON<null>,
+        rate: this.txFromJSON<null>,
+        release: this.txFromJSON<null>,
+        resolve: this.txFromJSON<null>,
+        respond: this.txFromJSON<null>,
+        pay_rent: this.txFromJSON<null>,
+        end_lease: this.txFromJSON<null>,
+        get_claim: this.txFromJSON<Option<Claim>>,
+        get_lease: this.txFromJSON<Lease>,
+        max_claim: this.txFromJSON<i128>,
+        exit_blend: this.txFromJSON<null>,
+        get_config: this.txFromJSON<Config>,
+        get_thread: this.txFromJSON<Thread>,
+        is_arbiter: this.txFromJSON<boolean>,
+        get_ratings: this.txFromJSON<LeaseRatings>,
+        lease_count: this.txFromJSON<u64>,
+        cancel_yield: this.txFromJSON<null>,
+        claim_damage: this.txFromJSON<null>,
+        claim_unpaid: this.txFromJSON<null>,
+        create_lease: this.txFromJSON<u64>,
+        get_arbiters: this.txFromJSON<Array<string>>,
+        send_message: this.txFromJSON<Thread>,
+        approve_yield: this.txFromJSON<null>,
+        blend_at_risk: this.txFromJSON<boolean>,
+        execute_claim: this.txFromJSON<null>,
+        propose_yield: this.txFromJSON<null>,
+        accept_counter: this.txFromJSON<null>,
+        expire_dispute: this.txFromJSON<null>,
+        get_reputation: this.txFromJSON<Reputation>,
+        refund_no_keys: this.txFromJSON<null>,
+        revoke_arbiter: this.txFromJSON<null>,
+        approve_arbiter: this.txFromJSON<null>,
+        confirm_move_in: this.txFromJSON<null>,
+        guarantee_value: this.txFromJSON<i128>,
+        register_arbiter: this.txFromJSON<null>,
+        get_arbiter_record: this.txFromJSON<ArbiterRecord>,
+        get_yield_proposal: this.txFromJSON<Option<YieldProposal>>
+  }
+}

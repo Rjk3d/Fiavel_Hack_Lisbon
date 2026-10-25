@@ -1,0 +1,44 @@
+{
+  "compilerOptions": {
+    "target": "ES2020",
+    "useDefineForClassFields": true,
+    "lib": [
+      "ES2020",
+      "DOM",
+      "DOM.Iterable"
+    ],
+    "module": "ESNext",
+    "skipLibCheck": true,
+    "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "moduleDetection": "force",
+    "noEmit": true,
+    "jsx": "react-jsx",
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noFallthroughCasesInSwitch": true,
+    "composite": true,
+    "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.app.tsbuildinfo",
+    "baseUrl": ".",
+    "paths": {
+      "@agents/*": [
+        "../agents/src/*"
+      ],
+      "@deployments/*": [
+        "../deployments/*"
+      ],
+      "lease-vault-client": [
+        "./node_modules/lease-vault-client"
+      ]
+    }
+  },
+  "include": [
+    "src",
+    "../agents/src/rules.ts",
+    "../agents/src/explain.ts",
+    "../agents/src/guards.ts"
+  ]
+}

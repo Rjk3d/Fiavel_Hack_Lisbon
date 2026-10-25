@@ -1,0 +1,35 @@
+{
+  "leaseVault": "CCPX4XT2EJQQKG2JCFPIWHQDFLO46QTBN5BP7VQQW22HEMZO7NTBTKMD",
+  "lease": "0",
+  "ranAt": "2026-10-25T14:19:59.632Z",
+  "steps": [
+    {
+      "step": "create_lease",
+      "tx": "https://stellar.expert/explorer/testnet/tx/2ff3fff2f1d3932e7a3ce308bac47373e9744c8fcc56626b7f8ef7093fba1ca2"
+    },
+    {
+      "step": "fund (Blend deposit)",
+      "tx": "https://stellar.expert/explorer/testnet/tx/b8679d0697b4d948a951aef1b6004f96ed5dd569170ae94b1d58b609350f0855"
+    },
+    {
+      "step": "confirm_move_in",
+      "tx": "https://stellar.expert/explorer/testnet/tx/8b9311edd5dc1197d98fa33c6d99c9c43bb0247345c9c6d7ad0838b6c14c9cfc"
+    },
+    {
+      "step": "pay_rent",
+      "tx": "https://stellar.expert/explorer/testnet/tx/170e73c83a32bbecc27a654a0d88bd1d1d737649061d8b7ed1885086aa758291"
+    },
+    {
+      "step": "claim_unpaid",
+      "tx": "https://stellar.expert/explorer/testnet/tx/30b73464869e6837d45929d969c745a9f3f9f79ce6c31d558b7580e47cd50ac2"
+    },
+    {
+      "step": "end_lease",
+      "tx": "https://stellar.expert/explorer/testnet/tx/627220765acacb9a5edd4d1653b5d39b9b70fa9e02018d16691f6470e67910f3"
+    },
+    {
+      "step": "coordinator release",
+      "tx": "https://stellar.expert/explorer/testnet/tx/2ee01ef72c591f0780a2f9b63a883ce363feae392164d5fca3a969ec3c2cdc5c"
+    }
+  ]
+}

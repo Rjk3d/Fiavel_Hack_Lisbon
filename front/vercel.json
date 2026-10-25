@@ -1,0 +1,20 @@
+{
+  "rewrites": [
+    {
+      "source": "/blend-faucet",
+      "destination": "/api/blend-faucet"
+    },
+    {
+      "source": "/((?!api/|assets/).*)",
+      "destination": "/index.html"
+    }
+  ],
+  "functions": {
+    "api/inventory.ts": {
+      "maxDuration": 60
+    },
+    "api/assistant.ts": {
+      "maxDuration": 30
+    }
+  }
+}

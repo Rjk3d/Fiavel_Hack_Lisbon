@@ -1,0 +1,43 @@
+{
+  "name": "fiavel",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Fiável web app: React + Vite, connected to the LeaseVault contract on Stellar Testnet.",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc -b --noEmit",
+    "test": "vitest run",
+    "build:preview": "VITE_MEMORY_ROUTER=1 vite build && node scripts/inline-preview.mjs",
+    "prebuild": "npm --prefix ../packages/lease-vault-client ci --no-audit --no-fund && npm --prefix ../packages/lease-vault-client run build",
+    "audit:funding": "node scripts/check-funding-network.mjs"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^1.3.0",
+    "@fontsource-variable/inter": "^5.1.0",
+    "@noble/ciphers": "^2.4.0",
+    "@noble/curves": "^2.4.0",
+    "@noble/hashes": "^2.4.0",
+    "buffer": "^6.0.3",
+    "lease-vault-client": "file:../packages/lease-vault-client",
+    "lucide-react": "^0.460.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-router-dom": "^6.28.0",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.5",
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@vitejs/plugin-react": "^4.7.0",
+    "autoprefixer": "^10.4.20",
+    "postcss": "^8.4.49",
+    "tailwindcss": "^3.4.19",
+    "typescript": "~5.6.3",
+    "vite": "^5.4.21",
+    "vitest": "^2.1.8"
+  }
+}
