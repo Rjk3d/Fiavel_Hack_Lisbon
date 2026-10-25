@@ -55,6 +55,10 @@ The contract IDs come from `../deployments/testnet.json`. `VITE_LEASE_VAULT_ID`,
   summarize). Served by `api/assistant.ts` on Vercel and by a Vite middleware in dev/preview. Needs `ANTHROPIC_API_KEY`
   (Vercel env var or `front/.env.local`); without it the app says the AI is off. No tools, input limits, a per-IP
   limit, and a code check that flags any number changed by a rewrite.
+- `src/stellar/inventory.ts` + `src/pages/live/InventoryPages.tsx` + `src/components/live/InventoryCard.tsx` — the photo
+  inventory: rooms, photos (resized, SHA-256), canonical hash signed on-chain, IndexedDB, file export/import with full
+  verification, move-out checks done by code, and the claim evidence hash. `server/inventory.ts` (served by
+  `api/inventory.ts`) is the AI part: describe a room at move-in, compare a room at move-out, structured output.
 
 ## Sign-in (optional)
 

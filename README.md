@@ -171,10 +171,11 @@ Run `npm run dev` in `front/` and open http://localhost:5174/app. The app create
 1. **Get test funds** for each role (Friendbot XLM and Blend test USDC).
 2. **Landlord → New lease** (demo mode: 1 month = 1 minute, yield option on), then copy the invite link.
 3. Open the invite: the **Tenant Guardian** explains every rule with the lease's own values. **Lock** the first rent and the guarantee, with or without the Blend option.
-4. Tenant then landlord **confirm move-in**: both sign the same inventory hash. Photos are hashed in the browser, never uploaded.
+4. **Move-in inventory** (lease page → Inventory → Start): photos room by room; **Analyse with AI** lists the defects already there, which you check and edit. Save, send the file to the other party, then both **confirm move-in** with the same inventory hash. Photos stay on the device; only the hash goes on-chain.
 5. Pay rent from **Payments**. Leave a month unpaid: after the grace period the **Landlord Assistant** proposes to take it from the guarantee. Ask it to "seize the whole guarantee now" to see the refusal.
 6. Open the lease and write in **Messages**: switch roles to answer. Each message is encrypted for the two parties and chained on-chain; the receiver can **translate** it, the writer can **polish** a draft, and either can **summarize** the thread with AI. A rule mentioned in a message links to the rule engine's explanation.
-7. **End the lease**, then let anyone **release** the guarantee after the claim window, or file a **damage claim**, answer with a counter-offer, and let the **arbiter** split the disputed amount.
+7. Do the **move-out inventory** (same rooms), **end the lease** with it, then **Compare move-in and move-out**: the AI sorts new damage from wear and pre-existing defects, the landlord ticks what they claim for, and the evidence hash is filled in the claim.
+8. Let anyone **release** the guarantee after the claim window, or file a **damage claim**, answer with a counter-offer, and let the **arbiter** split the disputed amount.
 
 Every action shows a toast with its Stellar Expert link. The Activity page is rebuilt from contract events.
 
@@ -242,6 +243,23 @@ lease windows, a public record of every arbiter's decisions, `bump` and tenant-l
 Both cap a damage claim at the guarantee minus the months taken from it. The transaction links above are from v1 to v3 until
 `scripts/deploy-testnet.sh` is run again and the demo replayed; the app shows the Messages card only on a contract that answers `get_thread`.
 
+### Inventory with photos (état des lieux)
+
+Most deposit disputes are "it was already there" against "it was not". Fiável makes the move-in inventory precise and the move-out comparison neutral:
+
+- **Room by room, with photos.** Each room has up to 6 photos (resized in the browser), notes and a list of defects. At move-in,
+  **Analyse with AI** lists what is already damaged or worn and what the photos do not show; the author checks and edits every line.
+- **One hash for everything.** The inventory hash commits to every room, note, defect and photo (each photo by its SHA-256), and is
+  what `confirm_move_in` and `end_lease` record. The inventory travels as a file between the parties; the app accepts a file only
+  if its hash and every photo check out, and warns before anyone co-signs a hash whose photos they have not seen.
+- **Move-out comparison.** Rooms are paired by name; code flags rooms documented on one side only and move-out photos that are
+  byte-for-byte move-in photos. The AI compares each room and labels every change: new damage, normal wear, already at move-in,
+  cleaning, missing item or unclear, with a confidence and the photos it relies on.
+- **The AI never decides.** It does not price damage, assign blame or give legal advice (`front/server/inventory.ts`, structured
+  output validated by code). The landlord picks the items they claim for and adds an invoice reference; the evidence hash of the
+  claim commits to those items and the report, so the tenant and the arbiter can check exactly what is claimed. The amount still
+  goes through the contract: answer, counter-offer, bounded arbiter.
+
 ### Messages between tenant and landlord
 
 - **Encrypted end to end.** Both parties already have a Stellar key; the app converts them to X25519, derives a key per lease
@@ -259,6 +277,8 @@ Both cap a damage claim at the guarantee minus the months taken from it. The tra
 - Testnet only. Wallets are test keypairs kept in the browser (`localStorage`); real use needs passkey smart accounts.
 - The optional team sign-in is a client-side check for demos, not access control.
 - `react-router-dom` 6.30 has two moderate advisories (SSR hydration, open redirect through user-supplied paths). The app is client-side only and navigates to paths it builds itself; moving to v7 is planned after the event.
+- Inventory photos are kept on the device that took or imported them (IndexedDB). Each party should keep the file: it is the evidence
+  the on-chain hash proves. AI analysis sends a room's photos to the Claude API when a party clicks it.
 - Messages: who wrote, when and the length are public; only the content is encrypted. A device keeps the messages it has seen;
   a new device sees only what the RPC's event history still holds. Losing a wallet key means losing access to its messages.
 - Reputation is costly, not impossible, to fake: ratings only count above a minimum lease length and guarantee, and the number of distinct counterparties is shown.
@@ -275,5 +295,5 @@ Before the hackathon: product research and planning (`docs/PLAN.md`), repository
 
 ## Use of AI
 
-- **In the product:** Fiável agents are deterministic (rule engine, no LLM): they explain lease rules from templates filled with on-chain values and prepare unsigned transactions; they never sign for users. The only LLM use is language help in the tenant-landlord chat (Claude through the Anthropic API: translate, polish, summarize), on the user's click, with no tools and no access to keys, funds or lease rules; changed figures are flagged by code.
+- **In the product:** Fiável agents are deterministic (rule engine, no LLM): they explain lease rules from templates filled with on-chain values and prepare unsigned transactions; they never sign for users. LLM use is limited to two helpers, both on the user's click, with no tools and no access to keys, funds or lease rules (Claude through the Anthropic API): language help in the tenant-landlord chat (translate, polish, summarize; changed figures are flagged by code), and the photo inventory (defects at move-in, changes at move-out; never a price or a decision, every line reviewed by a party).
 - **To build:** AI-assisted coding. _TODO: link to prompt log._

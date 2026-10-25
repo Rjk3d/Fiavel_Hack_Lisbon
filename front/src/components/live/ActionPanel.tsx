@@ -34,6 +34,7 @@ import { toUnits, usdc } from '../../stellar/format'
 import { sha256 } from '../../stellar/vault'
 import { cx } from '../../lib/cx'
 import { FundingDialog } from './FundingDialog'
+import { InventoryEvidence } from './InventoryCard'
 
 const ICON: Record<ContractFn, LucideIcon> = {
   fund: ShieldCheck,
@@ -149,7 +150,8 @@ function StandardActionDialog({ view, action, onClose }: { view: LeaseView; acti
     if (action.fn === 'resolve') return claim ? (Number(claim.amount) / 1e7 / 2).toFixed(2) : ''
     return ''
   })
-  const [useExisting, setUseExisting] = useState(!!lease.entry_hash)
+  // Hash of the room-by-room inventory or comparison report chosen in InventoryEvidence (hex).
+  const [evidenceHash, setEvidenceHash] = useState<string | null>(null)
   // Invest during the lease: amount kept liquid and yield split (percent).
   const [keep, setKeep] = useState(() => (Number(t.rent) / 1e7).toFixed(2))
   const [tenantPct, setTenantPct] = useState('70')
@@ -177,17 +179,17 @@ function StandardActionDialog({ view, action, onClose }: { view: LeaseView; acti
           args = { id, tenant: me, accept_yield: Boolean(action.args?.accept_yield) }
           break
         case 'confirm_move_in': {
-          const h = useExisting && lease.entry_hash ? Buffer.from(lease.entry_hash) : await inventoryHash()
+          const h = evidenceHash ? Buffer.from(evidenceHash, 'hex') : await inventoryHash()
           args = { id, who: me, entry_hash: h }
           guardArgs = { entry_hash: h }
           break
         }
         case 'end_lease':
-          args = { id, who: me, exit_hash: notes || files.length ? await inventoryHash() : undefined }
+          args = { id, who: me, exit_hash: evidenceHash ? Buffer.from(evidenceHash, 'hex') : notes || files.length ? await inventoryHash() : undefined }
           break
         case 'claim_damage': {
           const a = toUnits(amount || '0')
-          const evidence = await inventoryHash()
+          const evidence = evidenceHash ? Buffer.from(evidenceHash, 'hex') : await inventoryHash()
           args = { id, amount: a, evidence }
           guardArgs = { amount: a, evidence }
           break
@@ -263,16 +265,8 @@ function StandardActionDialog({ view, action, onClose }: { view: LeaseView; acti
 
       {needsInventory && (
         <div className="mt-4 space-y-3">
-          {action.fn === 'confirm_move_in' && lease.entry_hash && (
-            <label className="flex items-start gap-3 rounded-2xl bg-brand-tint/60 px-4 py-3 text-[14px]">
-              <input type="checkbox" className="mt-1" checked={useExisting} onChange={(e) => setUseExisting(e.target.checked)} />
-              <span>
-                <span className="font-semibold">Co-sign the inventory the other party signed</span>
-                <span className="mt-0.5 block break-all font-mono text-[12px] text-ink-muted">{Buffer.from(lease.entry_hash).toString('hex')}</span>
-              </span>
-            </label>
-          )}
-          {!(action.fn === 'confirm_move_in' && useExisting) && (
+          <InventoryEvidence view={view} fn={action.fn as 'confirm_move_in' | 'end_lease' | 'claim_damage'} onChange={setEvidenceHash} />
+          {!evidenceHash && (
             <>
               <Field label={action.fn === 'claim_damage' ? 'What happened (evidence summary)' : 'Inventory notes'}>
                 <textarea

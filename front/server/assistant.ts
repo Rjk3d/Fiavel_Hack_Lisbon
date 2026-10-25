@@ -135,7 +135,7 @@ export async function assist(body: unknown, client: MessagesClient | null): Prom
 }
 
 /** Client from ANTHROPIC_API_KEY, or null when the deployment has none. */
-export function clientFromEnv(env: Record<string, string | undefined> = process.env): MessagesClient | null {
+export function clientFromEnv(env: Record<string, string | undefined> = process.env): Anthropic | null {
   const apiKey = env.ANTHROPIC_API_KEY
   return apiKey ? new Anthropic({ apiKey }) : null
 }
