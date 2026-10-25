@@ -15,8 +15,9 @@ cd packages/lease-vault-client && npm install && npm run build && cd ../..
 cd front
 npm install
 npm run dev        # http://localhost:5174/app
-npm test           # landing demo agent
+npm test           # demo agent, funding engine, SDK envelopes and initial payment rendering
 npm run build      # type check + production build (prebuild rebuilds the contract client)
+npm run audit:funding # read-only network/token/real liquidity verification; no transactions
 ```
 
 The contract IDs come from `../deployments/testnet.json`. `VITE_LEASE_VAULT_ID`, `VITE_STELLAR_RPC_URL`,
@@ -63,6 +64,8 @@ Redeploy with `scripts/deploy-testnet.sh` after `stellar contract build`, then r
 (`stellar contract bindings typescript --wasm target/wasm32v1-none/release/lease_vault.wasm --output-dir packages/lease-vault-client --overwrite`).
 
 ## Wallets
+
+The deposit page and existing funding actions include a supported-crypto funding flow: direct configured USDC, or a real exact-output Stellar conversion into the tenant wallet followed by separately approved escrow funding. See [the audit, recovery design and test status](../docs/CRYPTO_FUNDING.md). The current Testnet USDC route has no observed XLM liquidity at 1,800/2,700 USDC; unavailable conversions are disabled. Distinct guarantors and Mainnet are unsupported. Success requires confirmed funding plus a fresh contract-state read.
 
 The three wallets are testnet keypairs generated in the browser so one person can play every role. They hold
 testnet assets only. The `Wallet` interface (`src/stellar/wallets.ts`) is the seam for passkey smart accounts

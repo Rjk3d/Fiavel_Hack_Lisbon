@@ -13,6 +13,10 @@ import { useLive, type LeaseView } from '../../state/live'
 import { NETWORK, explorerContract, explorerTx } from '../../stellar/config'
 import { clock, usdc } from '../../stellar/format'
 import { cx } from '../../lib/cx'
+import { FundingDialog } from '../../components/live/FundingDialog'
+import { Button } from '../../components/ui/Button'
+import { fundingScope } from '../../stellar/funding/stellar'
+import { browserAttemptStore } from '../../stellar/funding/storage'
 
 export function LivePayments() {
   const live = useLive()
@@ -64,6 +68,12 @@ export function LivePayments() {
 
 export function LiveDeposit() {
   const live = useLive()
+  const [fundingView, setFundingView] = useState<LeaseView | null>(null)
+  const fundingEntries = live.role === 'tenant' ? live.mine.map(view => {
+    let saved = false
+    try { saved = !!browserAttemptStore().load(fundingScope(live.wallet, view.id)) } catch { saved = true /* Surface corrupt recovery data instead of hiding it. */ }
+    return { view, saved }
+  }).filter(entry => entry.saved || entry.view.snap.lease.status.tag === 'Created') : []
   return (
     <>
       <PageHeader
@@ -72,6 +82,8 @@ export function LiveDeposit() {
         sub="The contract holds it. Nobody can take it during the lease; unpaid rent and damage follow fixed rules; the rest comes back by default."
       />
       <NoFunds />
+      {fundingEntries.map(({ view, saved }) => <section key={view.id.toString()} className="card mt-5 border-brand/20 p-5 sm:p-7"><p className="eyebrow">Lease #{view.id.toString()} · Stellar Testnet</p><h2 className="mt-2 text-[22px] font-semibold">{saved ? 'Your saved escrow funding' : 'Pay with the supported crypto you have.'}</h2><p className="mt-2 text-[14px] leading-6 text-ink-muted">{usdc(view.snap.lease.terms.deposit)} guarantee + {usdc(view.snap.lease.terms.rent)} first rent. Use USDC directly or convert a Stellar asset with real available liquidity. Your guarantee stays under LeaseVault rules.</p><Button className="mt-4" onClick={() => setFundingView(view)}>{saved ? 'Check status or resume funding' : 'Review funding options'}</Button></section>)}
+      {fundingView && <FundingDialog key={`${live.wallet.address}:${fundingView.id}`} view={fundingView} onClose={() => setFundingView(null)}/>}
       <div className="mt-6 space-y-6">
         {live.mine.length ? (
           live.mine.map((v) => <GuaranteeDetail key={v.id.toString()} view={v} />)
