@@ -1,4 +1,5 @@
 import type { Lease } from 'lease-vault-client'
+import type { FundingProof } from '@escrow/domain'
 
 export const UNIT = 10_000_000n
 export const FUND_FEE_CAP = 100_000_000n // Explicit 10 XLM transaction-fee ceiling, not a quoted fee.
@@ -29,8 +30,9 @@ export function assertCanFund(lease: Lease, payer: string, now: number) {
   if (payer === lease.landlord || payer === lease.terms.arbiter) throw new Error('The landlord and arbiter cannot fund as tenant.')
   if (now > Number(lease.created_at + lease.terms.move_in_window)) throw new Error('The funding deadline has passed. Converted USDC remains in your own wallet.')
 }
-export interface Scope { network: string; vault: string; token: string; payer: string; leaseId: string }
-export const scopeKey = (s: Scope) => [s.network, s.vault, s.token, s.payer, s.leaseId].join('|')
+export interface Scope { network: string; vault: string; token: string; payer: string; leaseId: string; provider?: 'leasevault' | 'trustless_work' }
+// Preserve every legacy payment key. New providers have an explicit namespace.
+export const scopeKey = (s: Scope) => [s.network, s.vault, s.token, s.payer, s.leaseId, ...(s.provider && s.provider !== 'leasevault' ? [s.provider] : [])].join('|')
 export interface WalletAsset { asset: AssetId; balance: bigint; spendable: bigint; authorized: boolean; reason?: string }
 export interface SupportedAsset { asset: WalletAsset; supported: boolean; reason?: string }
 export interface WalletState { assets: WalletAsset[]; usdcCapacity: bigint; hasUSDC: boolean; usdcAuthorized: boolean; xlmSpendable: bigint; fee: bigint; ledgerTime: number }
@@ -55,10 +57,13 @@ export function validateSpend(state: WalletState, quote: Quote) {
   if (quote.kind === 'path' && state.usdcCapacity < quote.receive) throw new Error('The destination USDC trustline limit is too low for the exact receive amount.')
 }
 export function assertQuote(quote: Quote, scope: Scope, lease: Lease, now: number) {
+  return assertQuoteRequirements(quote, scope, { amount: totalFor(lease, quote.acceptYield), revision: lease.created_at.toString() }, now)
+}
+export function assertQuoteRequirements(quote: Quote, scope: Scope, required: { amount: bigint; revision: string }, now: number) {
   if (scopeKey(quote.scope) !== scopeKey(scope)) throw new Error('Quote belongs to another wallet, lease, asset or network.')
   if (quote.expires <= now) throw new Error('Quote expired. Request a fresh quote.')
   if (quote.slippageBps < 0 || quote.slippageBps > 100 || !Number.isInteger(quote.slippageBps)) throw new Error('Slippage must be between 0 and 1%.')
-  if (quote.required !== totalFor(lease, quote.acceptYield) || quote.createdAt !== lease.created_at.toString()) throw new Error('Lease terms changed. Review a new quote.')
+  if (quote.required !== required.amount || quote.createdAt !== required.revision) throw new Error('Lease terms changed. Review a new quote.')
   if (quote.expected <= 0n || quote.maximum < quote.expected || quote.maximum > ceilBps(quote.expected, quote.slippageBps) || quote.fee <= 0n) throw new Error('Invalid quoted spend or fee limits.')
   if (quote.kind === 'direct' && (quote.expected !== quote.required || quote.maximum !== quote.required || quote.receive !== 0n)) throw new Error('Invalid direct USDC quote.')
   if (quote.kind === 'path' && (quote.receive <= 0n || quote.receive > quote.required || quote.path.length > 5)) throw new Error('Invalid exact-output conversion quote.')
@@ -71,7 +76,11 @@ export interface TransactionStatus { state: 'pending' | 'failed' | 'confirmed' }
 export interface FundingPorts {
   scope: Scope
   targetAsset: AssetId
-  lease(): Promise<Lease>
+  lease?(): Promise<Lease>
+  requirements?(acceptYield: boolean): Promise<{ amount: bigint; revision: string }>
+  beforeStart?(quote: Quote): void
+  persistAttempt?(attempt: Attempt): void
+  fundingProof?(attempt: Attempt): Promise<FundingProof | null>
   wallet(): Promise<WalletState>
   paths(input: AssetId, required: bigint): Promise<Path[]>
   checkNetwork(): Promise<void>

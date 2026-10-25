@@ -70,3 +70,11 @@ The deposit page and existing funding actions include a supported-crypto funding
 The three wallets are testnet keypairs generated in the browser so one person can play every role. They hold
 testnet assets only. The `Wallet` interface (`src/stellar/wallets.ts`) is the seam for passkey smart accounts
 (OpenZeppelin), which is the next step.
+
+## Hybrid escrow migration (shadow integration)
+
+LeaseVault remains the connected financial provider. Shared provider interfaces, immutable lease bindings, capability checks and a read-only Trustless Work adapter prepare incremental adoption. Trustless Work writes are disabled pending approved deployment, asset/roles, fees and independent verification; its documented fees do not satisfy the exact 150 / 1,650 net rental settlement from 1,800 USDC.
+
+Set repository-root `ESCROW_PROVIDER_MODE=leasevault|hybrid|trustless_work` before starting/building Vite. The flag controls new-lease eligibility only; `hybrid` currently falls back to LeaseVault, and `trustless_work` blocks unsupported new rentals. Existing leases keep their original provider. `TW_API_KEY` belongs only in a future authenticated server process, never `VITE_*`. The shadow HTTP route currently returns 503 until trusted sessions and an authorized binding store are wired.
+
+See the [compatibility audit, migration report, test coverage and rollout blockers](../docs/HYBRID_ESCROW_MIGRATION.md) and [durable server-store setup](../packages/escrow-domain/README.md).

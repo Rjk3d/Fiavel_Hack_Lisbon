@@ -4,6 +4,8 @@ import { useToast } from '../components/ui/Toast'
 import { NETWORK, explorerTx } from '../stellar/config'
 import { balances as loadBalances, fund as fundWallet, loadWallet, ROLES, type Balances, type LiveRole, type Wallet } from '../stellar/wallets'
 import { contractEvents, getLease, invoke, leaseCount, plainError, snapshotOf, type ChainEvent } from '../stellar/vault'
+import type { EscrowState } from '@escrow/domain'
+import { assertLeaseVaultAction, observeLegacyEscrow } from '../escrow/runtime'
 
 /**
  * Live state: three testnet wallets (one per role), every lease that involves them,
@@ -21,6 +23,7 @@ export interface LeaseView {
   snap: Snapshot
   insight: Insight
   meta: LeaseMeta
+  escrow?: EscrowState
 }
 
 export interface TxRecord {
@@ -113,7 +116,8 @@ export function LiveProvider({ children }: { children: ReactNode }) {
     const views = await Promise.all(
       relevant.map(async ([id, l]) => {
         const snap = await snapshotOf(id, l)
-        return { id, snap, insight: analyze(snap), meta: metas.current[id.toString()] ?? DEFAULT_META }
+        const escrow = await observeLegacyEscrow(id, snap)
+        return { id, snap, escrow, insight: analyze(snap), meta: metas.current[id.toString()] ?? DEFAULT_META }
       }),
     )
     setLeases(views.sort((a, b) => Number(b.id - a.id)))
@@ -179,6 +183,7 @@ export function LiveProvider({ children }: { children: ReactNode }) {
     async (fn, args, label, leaseId) => {
       setBusy(label)
       try {
+        if (leaseId !== undefined) assertLeaseVaultAction(leaseId)
         const out = await invoke(wallets[role], fn, args)
         const { hash } = out
         const rec: TxRecord = { hash, label, leaseId: leaseId?.toString(), role, at: Math.floor(Date.now() / 1000) }

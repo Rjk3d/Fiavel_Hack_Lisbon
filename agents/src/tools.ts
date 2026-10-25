@@ -8,6 +8,7 @@ import { deployment, leaseEvents, server, snapshot } from "./chain.js";
 import { explainRule, ruleFor, RULES, type RuleId } from "./explain.js";
 import { checkAction } from "./guards.js";
 import { actionsFor, analyze, usdc, type ContractFn, type Role } from "./rules.js";
+export { getProviderEscrowContext } from "./escrow-context.js";
 
 /** get_lease_status: where the lease stands for this role. */
 export async function getLeaseStatus(id: bigint, role: Role) {

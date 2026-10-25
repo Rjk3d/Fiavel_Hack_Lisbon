@@ -1,4 +1,5 @@
-import { Client, Errors, contract, rpc, scValToNative, type Claim, type Lease } from 'lease-vault-client'
+import { Address, Asset, Client, Errors, contract, rpc, scValToNative, type Claim, type Lease } from 'lease-vault-client'
+import type { EscrowBinding, FundingProof } from '@escrow/domain'
 import type { Snapshot } from '@agents/rules'
 import { NETWORK } from './config'
 import type { Wallet } from './wallets'
@@ -6,6 +7,7 @@ import type { Wallet } from './wallets'
 /** Reads and writes LeaseVault. Every read is a simulation; every write is signed by a wallet. */
 
 const server = new rpc.Server(NETWORK.rpcUrl)
+server.httpClient.defaults.timeout = 12000
 
 const reader = new Client({
   contractId: NETWORK.leaseVault,
@@ -32,6 +34,23 @@ export async function leaseCount(): Promise<number> {
 
 export async function getLease(id: bigint): Promise<Lease> {
   return (await reader.get_lease({ id })).result
+}
+
+/** Recheck a linked historical funding hash; never trust a cached success badge. */
+export async function fundingProofFor(binding: EscrowBinding, lease: Lease): Promise<FundingProof | null> {
+  const hash = [...binding.transactions].reverse().find(tx => tx.kind === 'fund' && tx.status === 'confirmed')?.hash
+  if (!hash || !/^[a-f0-9]{64}$/.test(hash) || binding.provider !== 'leasevault') return null
+  try {
+    const [tx, config, network] = await Promise.all([server.getTransaction(hash), reader.get_config(), server.getNetwork()])
+    if (tx.status !== 'SUCCESS' || network.passphrase !== binding.network || config.result.token !== binding.asset.contractId || new Asset(binding.asset.code, binding.asset.issuer).contractId(binding.network) !== binding.asset.contractId || tx.envelopeXdr.switch().name !== 'envelopeTypeTx') return null
+    const operations = tx.envelopeXdr.v1().tx().operations()
+    if (operations.length !== 1 || operations[0].body().switch().name !== 'invokeHostFunction') return null
+    const invoke = operations[0].body().invokeHostFunctionOp().hostFunction().invokeContract()
+    const args = invoke.args()
+    if (Address.fromScAddress(invoke.contractAddress()).toString() !== binding.contractId || invoke.functionName().toString() !== 'fund' || args.length !== 3 || String(scValToNative(args[0])) !== binding.providerEscrowId || scValToNative(args[1]) !== lease.tenant || typeof scValToNative(args[2]) !== 'boolean' || lease.terms.deposit.toString() !== binding.expectedDeposit) return null
+    const buffer = scValToNative(args[2]) && lease.terms.yield_offered ? lease.terms.deposit * BigInt(lease.terms.buffer_bps) / 10000n : 0n
+    return { source: 'rpc', contractId: binding.contractId, network: binding.network, token: binding.asset.contractId, amount: (lease.terms.rent + lease.terms.deposit + buffer).toString(), transactionHash: hash, ledger: tx.ledger, successful: true }
+  } catch { return null }
 }
 
 /** Everything the rule engine needs about one lease. */

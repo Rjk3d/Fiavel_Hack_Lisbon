@@ -7,6 +7,7 @@ import { Dialog } from '../ui/Dialog'
 import { useLive } from '../../state/live'
 import { toUnits, usdc } from '../../stellar/format'
 import { cx } from '../../lib/cx'
+import { ESCROW_MODE, newRentalEligibility } from '../../escrow/runtime'
 
 /** Durations in seconds. Demo mode compresses a month into a minute so a full lease plays out live. */
 const MODES = {
@@ -25,9 +26,11 @@ export function NewLeaseDialog({ open, onClose }: { open: boolean; onClose: () =
   const [yieldOffered, setYield] = useState(true)
   const [arbiter, setArbiter] = useState(live.wallets.arbiter.address)
   const [error, setError] = useState<string | null>(null)
+  const eligible = newRentalEligibility()
 
   async function submit() {
     setError(null)
+    if (eligible.provider?.id !== 'leasevault') return setError('No verified provider supports these rental rights. Existing escrows remain unchanged.')
     let terms: Terms
     try {
       const m = MODES[mode]
@@ -74,12 +77,14 @@ export function NewLeaseDialog({ open, onClose }: { open: boolean; onClose: () =
           <Button variant="secondary" onClick={onClose}>
             Cancel
           </Button>
-          <Button onClick={submit} disabled={!!live.busy} icon={<FileSignature size={16} />}>
+          <Button onClick={submit} disabled={!!live.busy || eligible.provider?.id !== 'leasevault'} icon={<FileSignature size={16} />}>
             {live.busy ? 'Signing and submitting…' : 'Create on Stellar'}
           </Button>
         </div>
       }
     >
+      <label className="mb-4 block text-[13px] font-semibold">Deposit protection<select className="mt-2 h-11 w-full rounded-2xl border border-line bg-canvas px-4" value={eligible.provider?.id ?? ''} onChange={() => {}} aria-describedby="provider-eligibility"><option value="leasevault" disabled={ESCROW_MODE === 'trustless_work'}>LeaseVault · rental safeguards</option><option value="trustless_work" disabled>Trustless Work · shadow only, rental rights not verified</option>{!eligible.provider && <option value="">No compatible provider enabled</option>}</select></label>
+      <p id="provider-eligibility" className="mb-4 text-[12px] leading-5 text-ink-muted">{eligible.provider ? 'This rental requires exact-net claims, rental deadlines and unpaid-rent rules. It remains on LeaseVault. Trustless Work is not activated by a feature flag alone.' : 'The selected rollout mode has no verified provider for these rental requirements. Creation is blocked; existing leases remain on their original provider.'}</p>
       <div className="grid gap-4 sm:grid-cols-2">
         <Field label="Home (stays off-chain)" wide>
           <Input value={home} onChange={setHome} />

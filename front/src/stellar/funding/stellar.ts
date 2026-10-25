@@ -1,7 +1,9 @@
 import { Account, Address, Asset, Client, Contract, Networks, Operation, Transaction, TransactionBuilder, nativeToScVal, rpc, type Lease } from 'lease-vault-client'
 import { NETWORK } from '../config'
 import type { Wallet } from '../wallets'
-import { FundingEngine } from './engine'
+import { createProviderFundingEngine } from '../../escrow/funding'
+import { createEscrowRegistry, legacyBinding } from '../../escrow/runtime'
+import { snapshotOf } from '../vault'
 import { browserAttemptStore } from './storage'
 import { assetKey, assertCanFund, decimal, FUND_FEE_CAP, scopeKey, totalFor, units, type AssetId, type Attempt, type FundingPorts, type Path, type Quote, type Scope, type TxReference, type WalletState } from './domain'
 
@@ -128,8 +130,17 @@ export function fundingPorts(wallet: Wallet, leaseId: bigint): FundingPorts {
       const current: Lease = await lease()
       return current.status.tag === 'Funded' && current.tenant === wallet.address && current.created_at.toString() === attempt.createdAt && current.rent_escrow === current.terms.rent && current.liquid + current.placed === BigInt(attempt.required) - current.terms.rent
     },
+    async fundingProof(attempt) {
+      if (!attempt.fund || !await ports.verify(attempt)) return null
+      const tx = await server.getTransaction(attempt.fund.hash)
+      if (tx.status !== 'SUCCESS') return null
+      return { source: 'rpc', contractId: scope.vault, network: scope.network, token: scope.token, amount: attempt.required, transactionHash: attempt.fund.hash, ledger: tx.ledger, successful: true }
+    },
   }
   return ports
 }
 
-export function createFundingEngine(wallet: Wallet, leaseId: bigint) { return new FundingEngine(fundingPorts(wallet, leaseId), browserAttemptStore()) }
+export function createFundingEngine(wallet: Wallet, leaseId: bigint) {
+  const registry = createEscrowRegistry()
+  return createProviderFundingEngine(async () => registry.bind(legacyBinding(leaseId, await snapshotOf(leaseId))), registry, fundingPorts(wallet, leaseId), browserAttemptStore())
+}
