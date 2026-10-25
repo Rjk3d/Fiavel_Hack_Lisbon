@@ -3,7 +3,7 @@ import { NavLink, Outlet, Link } from 'react-router-dom'
 import { ArrowUpRight, Bot, CalendarDays, ChevronDown, CreditCard, FileText, LayoutDashboard, Menu, ShieldCheck, Sparkles, X, History } from 'lucide-react'
 import { Brand } from '../components/ui'
 import { useDemo } from './use-demo'
-const navigation = [{ to: '/app', label: 'Overview', icon: LayoutDashboard }, { to: '/app/lease', label: 'My lease', icon: FileText }, { to: '/app/payments', label: 'Payments', icon: CreditCard }, { to: '/app/deposit', label: 'Deposit', icon: ShieldCheck }, { to: '/app/assistant', label: 'AI assistant', icon: Sparkles }, { to: '/app/activity', label: 'Activity', icon: History }]
+const navigation = [{ to: '/app', label: 'Overview', icon: LayoutDashboard }, { to: '/app/lease', label: 'My lease', icon: FileText }, { to: '/app/payments', label: 'Payments', icon: CreditCard }, { to: '/app/deposit', label: 'Deposit', icon: ShieldCheck }, { to: '/app/assistant', label: 'AI assistant', icon: Sparkles }, { to: '/app/reviews', label: 'Reputation', icon: ShieldCheck }, { to: '/app/activity', label: 'Activity', icon: History }]
 export function AppLayout() {
   const { role, setRole } = useDemo()
   const [open, setOpen] = useState(false)

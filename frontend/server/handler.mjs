@@ -3,7 +3,7 @@ import { composeReply } from '../src/lib/ai/reply.ts'
 import { parseModelPlan, parseRequest, parseReply } from '../src/lib/ai/protocol.ts'
 import { classify } from '../src/lib/ai/policy.ts'
 
-export function createAssistantHandler({ authenticate, loadSnapshot, gateway, allowExternal = false, origin = 'http://localhost:5173', now = Date.now, requestTimeoutMs = 12000 } = {}) {
+export function createAssistantHandler({ authenticate, loadSnapshot, loadReputation, gateway, allowExternal = false, origin = 'http://localhost:5173', now = Date.now, requestTimeoutMs = 12000 } = {}) {
   const limits = new Map()
   return async function handler(req, res) {
     res.setHeader('Content-Type', 'application/json; charset=utf-8')
@@ -12,7 +12,7 @@ export function createAssistantHandler({ authenticate, loadSnapshot, gateway, al
     const finish = (status, value) => { if (!res.destroyed && !res.writableEnded) { res.statusCode = status; res.end(JSON.stringify(value)) } }
     if (req.url !== '/api/assistant') return finish(404, { error: 'Not found.' })
     if (req.method !== 'POST') { res.setHeader('Allow', 'POST'); return finish(405, { error: 'POST required.' }) }
-    if (req.headers.origin !== origin || req.headers['x-fiavel-assistant'] !== '1') return finish(403, { error: 'Origin rejected.' })
+    if (req.headers.origin !== (typeof origin === 'function' ? origin() : origin) || req.headers['x-fiavel-assistant'] !== '1') return finish(403, { error: 'Origin rejected.' })
     if (!req.headers['content-type']?.startsWith('application/json')) return finish(415, { error: 'JSON required.' })
     if (!authenticate || !loadSnapshot) return finish(503, { error: 'Session and data adapters are not configured.' })
     const controller = new AbortController()
@@ -36,6 +36,10 @@ export function createAssistantHandler({ authenticate, loadSnapshot, gateway, al
       try { context = buildContext(user, snapshot, input.leaseId) } catch { return finish(403, { error: 'Lease unavailable.' }) }
       const request = { ...input, context }
       const intent = classify(input.question, input.history)
+      if (intent === 'reputation') {
+        if (loadReputation) context.reputation = await loadReputation(user, { signal: controller.signal })
+        return finish(200, parseReply(composeReply(request, 'reputation')))
+      }
       // Sensitive requests are refused locally; never send them to a model.
       if (['safety', 'privacy'].includes(intent)) return finish(200, parseReply(composeReply(request)))
       if (!gateway) return finish(503, { error: 'Model gateway not configured. Choose explicit demo mode.' })

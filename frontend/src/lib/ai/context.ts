@@ -2,7 +2,7 @@ import type { Dispute, Lease, Transaction, User } from '../types'
 
 export type Language = 'en' | 'fr'
 export type Provenance = 'demo' | 'backend' | 'verified-blockchain'
-export type Intent = 'payment' | 'deposit' | 'blockchain' | 'lease' | 'dispute' | 'evidence' | 'draft' | 'arbitration' | 'operations' | 'privacy' | 'safety' | 'unrelated'
+export type Intent = 'payment' | 'deposit' | 'blockchain' | 'lease' | 'dispute' | 'evidence' | 'draft' | 'arbitration' | 'operations' | 'privacy' | 'safety' | 'unrelated' | 'reputation'
 export interface Turn { role: 'user' | 'assistant'; text: string; intent?: Intent }
 export interface EvidenceMetadata { id: string; leaseId: string; name: string; kind: string; verified: boolean; visibleTo: string[] }
 export interface ClaimRecord extends Dispute { visibleTo: string[] }
@@ -13,6 +13,7 @@ export interface Snapshot {
 export const actionIds = ['lease', 'payments', 'disputes', 'evidence', 'draft'] as const
 export type ActionId = typeof actionIds[number]
 export interface RentalContext {
+  reputation?: { provenance: 'demo' | 'live'; opinions: { rating: number; text: string; verifiedRental: boolean }[]; eligibility: { id: string; state: string; reason: string }[]; summary: { count: number; verifiedRentals: number; average: number | null } }
   user: Pick<User, 'id' | 'role' | 'name'>
   asOf: string; provenance: Provenance; activeLease: Lease | null; leases: Lease[]
   payments: (Transaction & { displayStatus: 'Upcoming' | 'Recorded' | 'Simulated' })[]

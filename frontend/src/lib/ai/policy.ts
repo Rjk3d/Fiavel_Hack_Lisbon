@@ -1,6 +1,6 @@
 import type { Intent, Language, Turn } from './context.ts'
 
-export const intents: Intent[] = ['payment', 'deposit', 'blockchain', 'lease', 'dispute', 'evidence', 'draft', 'arbitration', 'operations', 'privacy', 'safety', 'unrelated']
+export const intents: Intent[] = ['payment', 'deposit', 'blockchain', 'lease', 'dispute', 'evidence', 'draft', 'arbitration', 'operations', 'privacy', 'safety', 'unrelated', 'reputation']
 const normalize = (value: string) => value.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
 
 export function detectLanguage(question: string, fallback: Language): Language {
@@ -15,6 +15,7 @@ export function classify(question: string, history: Turn[] = []): Intent {
   // These checks run before any provider and cannot be overridden by its output.
   if (/\b(other|another|autre)\b.*\b(tenant|locataire|private|prive|message|dispute|litige)\b|\b(secret|api key|system prompt)\b|(?:show|reveal|affiche|montre).*\b(private|prive)\b/.test(q)) return 'privacy'
   if (/ignore.*(instruction|rule|regle)|\b(sign|submit|execute|transfer|send funds|release.*(now|immediately)|libere|signe|transfere)\b/.test(q)) return 'safety'
+  if (/review|reputation|feedback|previous tenants|avis|avaliac/.test(q)) return 'reputation'
   if (/stellar|soroban|blockchain|on.chain|funded|finance.*reseau/.test(q)) return 'blockchain'
   if (/arbitrat|arbitre|appel|appeal/.test(q)) return 'arbitration'
   if (/draft|write|respond|reply|redig|ecri|repond|message|communication/.test(q)) return 'draft'

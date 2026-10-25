@@ -49,6 +49,12 @@ export function composeReply(request: AssistantRequest, proposedIntent?: Intent)
   const amountNote = claimAmount ? say(`The ${money(claimAmount)} amount comes from your message, not a verified claim.`, `Le montant de ${money(claimAmount)} vient de votre message, pas d’une réclamation vérifiée.`) : ''
   const checklist = say('Evidence checklist: dated check-in and check-out photos, signed inventory, relevant lease clause, itemized invoice or repair estimate, and a timeline of communications. Preserve originals and redact unrelated personal information. Photos, authenticity, and liability have not been assessed.', 'Preuves à rassembler : photos datées à l’entrée et à la sortie, état des lieux signé, clause pertinente du bail, facture détaillée ou devis, et chronologie des échanges. Conservez les originaux et masquez les données personnelles non pertinentes. Photos, authenticité et responsabilité non évaluées.')
   switch (intent) {
+    case 'reputation': {
+      const reputation = c.reputation
+      reply.text = reputation ? say(`${reputation.provenance === 'demo' ? 'Fictional demo feedback' : 'Authorized published feedback'}: ${reputation.summary.count} review(s), ${reputation.summary.verifiedRentals} verified reviewed rental(s). Reviews are subjective opinions, not established facts.`, `${reputation.provenance === 'demo' ? 'Avis fictifs de démonstration' : 'Avis publiés autorisés'} : ${reputation.summary.count} avis, ${reputation.summary.verifiedRentals} location(s) vérifiée(s). Les avis sont des opinions, pas des faits établis.`) + '\n' + reputation.eligibility.map(item => `${item.id}: ${item.state} — ${item.reason}`).join('\n') + '\n' + reputation.opinions.map(item => `${item.rating}/5 · ${say('User opinion', 'Opinion utilisateur')}: «${item.text.slice(0,500)}»`).join('\n') : say('Reputation data is unavailable. Active demo leases cannot verify a completed rental. Open Reputation to explore the separate fictional completed-rental example.', 'Les données de réputation sont indisponibles. Un bail de démonstration actif ne prouve pas une location terminée. Consultez Réputation pour explorer un exemple fictif distinct.')
+      reply.text += '\n' + say('To write or respond fairly: describe firsthand events, separate facts from assumptions, remove private details, and review your wording before submitting. Open Reputation for ratings and writing guidance. No review has been submitted.', 'Pour rédiger un avis ou une réponse : décrivez vos observations, distinguez les faits des suppositions et retirez les informations privées. Consultez Réputation pour rédiger votre avis. Aucun avis soumis.')
+      break
+    }
     case 'payment': {
       const portfolio = c.user.role === 'landlord' && /which payments|coming up|all payments|portfolio|quels paiements|mes loyers|upcoming payments/i.test(question) && !/this lease|selected|ce bail|bail s[eé]lectionn[eé]/i.test(question)
       const records = (portfolio ? c.payments : currentPayments).filter(item => item.kind === 'rent')
@@ -102,6 +108,12 @@ export function composeReply(request: AssistantRequest, proposedIntent?: Intent)
 export const contextualDemo: ContextualAssistant = {
   async reply(request) {
     request.signal?.throwIfAborted()
+    if (classify(request.question, request.history) === 'reputation') {
+      try {
+        const response = await fetch('/api/reviews/context', { credentials: 'same-origin', headers: { 'X-Fiavel-Reviews': '1', 'X-Fiavel-Demo-Role': request.context.user.role }, signal: request.signal ? AbortSignal.any([request.signal, AbortSignal.timeout(5000)]) : AbortSignal.timeout(5000) })
+        if (response.ok) return composeReply({ ...request, context: { ...request.context, reputation: await response.json() } })
+      } catch { request.signal?.throwIfAborted() /* Unavailable is stated explicitly below. */ }
+    }
     return composeReply(request)
   },
 }
