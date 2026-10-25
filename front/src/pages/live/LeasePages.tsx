@@ -9,6 +9,7 @@ import { NewLeaseDialog } from '../../components/live/NewLeaseDialog'
 import { InvestCard } from '../../components/live/invest'
 import { TermsReview } from '../../components/live/TermsReview'
 import { PartiesCard } from '../../components/live/reputation'
+import { LeaseChat } from '../../components/live/LeaseChat'
 import { MONTH_PILL, months, statusOf, toActivity } from '../../components/live/lease-view'
 import { ActivityList } from '../../components/dashboard/ActivityList'
 import { AIInsightCard } from '../../components/ai/AIInsightCard'
@@ -218,7 +219,8 @@ function LeaseDetailBody({ view }: { view: LeaseView }) {
   const l = view.snap.lease
   const t = l.terms
   const [label, tone] = statusOf(view)
-  const history = live.events.filter((e) => e.leaseId === view.id).reverse().map(toActivity)
+  // Messages have their own card; the history keeps money and lease steps.
+  const history = live.events.filter((e) => e.leaseId === view.id && e.name !== 'message_sent').reverse().map(toActivity)
   const rows = months(view, live.events, live.now)
   const claim = view.snap.claim
 
@@ -289,6 +291,8 @@ function LeaseDetailBody({ view }: { view: LeaseView }) {
         <InvestCard view={view} />
         <PartiesCard view={view} />
       </div>
+
+      <LeaseChat view={view} />
 
       {claim && (
         <section className="card border-warning/30 p-5 sm:p-6">

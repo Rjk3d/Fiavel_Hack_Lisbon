@@ -16,14 +16,14 @@ mod test;
 
 use soroban_sdk::{
     auth::{ContractContext, InvokerContractAuthEntry, SubContractInvocation},
-    contract, contractevent, contractimpl, panic_with_error, token::TokenClient, vec, Address,
-    BytesN, Env, IntoVal, Symbol, Vec,
+    contract, contractevent, contractimpl, panic_with_error, token::TokenClient, vec,
+    xdr::ToXdr, Address, Bytes, BytesN, Env, IntoVal, Symbol, Vec,
 };
 
 pub use blend::{BlendPoolClient, Positions, Request, Reserve, ReserveConfig, ReserveData};
 pub use types::{
     ArbiterRecord, Claim, Config, DataKey, Error, Lease, LeaseRatings, Reputation, Status, Terms,
-    YieldProposal,
+    Thread, YieldProposal,
 };
 
 const BPS: i128 = 10_000;
@@ -40,6 +40,8 @@ const LOSS_TOLERANCE_BPS: i128 = 10;
 const DAY_IN_LEDGERS: u32 = 17_280;
 const TTL_THRESHOLD: u32 = DAY_IN_LEDGERS;
 const TTL_EXTEND_TO: u32 = 7 * DAY_IN_LEDGERS;
+/// Largest encrypted message, in bytes (about 980 characters of text).
+const MAX_MESSAGE: u32 = 1_024;
 
 #[contractevent]
 pub struct LeaseCreated {
@@ -169,6 +171,19 @@ pub struct Rated {
     pub score: u32,
     /// False when the lease was below the rating thresholds.
     pub counted: bool,
+}
+
+/// An encrypted message between the two parties. Only they can read
+/// `payload`; `thread` is the running hash after this message.
+#[contractevent]
+pub struct MessageSent {
+    #[topic]
+    pub id: u64,
+    #[topic]
+    pub from: Address,
+    pub seq: u32,
+    pub payload: Bytes,
+    pub thread: BytesN<32>,
 }
 
 #[contract]
@@ -816,6 +831,40 @@ impl LeaseVault {
         .publish(&env);
     }
 
+    // ── Messages ────────────────────────────────────────────────────────
+
+    /// Sends a message to the other party of a lease, once the tenant is
+    /// known. The app encrypts it for the two parties before it gets here, so
+    /// the contract only checks who sends it and chains it into the thread
+    /// hash. It moves no money and changes nothing else on the lease.
+    pub fn send_message(env: Env, id: u64, from: Address, payload: Bytes) -> Thread {
+        from.require_auth();
+        if payload.is_empty() || payload.len() > MAX_MESSAGE {
+            panic_with_error!(&env, Error::InvalidMessage);
+        }
+        let lease = load(&env, id);
+        if lease.tenant.is_none() {
+            panic_with_error!(&env, Error::WrongStatus);
+        }
+        require_party(&env, &lease, &from);
+        let prev = Self::get_thread(env.clone(), id);
+        let seq = prev.count;
+        let thread = Thread {
+            count: seq + 1,
+            hash: thread_hash(&env, &prev.hash, &from, seq, &payload),
+        };
+        keep_persistent(&env, &DataKey::Thread(id), &thread);
+        MessageSent {
+            id,
+            from,
+            seq,
+            payload,
+            thread: thread.hash.clone(),
+        }
+        .publish(&env);
+        thread
+    }
+
     /// Extends the storage life of a lease and its records. Callable by
     /// anyone (the coordinator does it), so a long lease with no activity is
     /// never archived between two payments.
@@ -828,6 +877,7 @@ impl LeaseVault {
             DataKey::YieldProposal(id),
             DataKey::Ratings(id),
             DataKey::BufferLocked(id),
+            DataKey::Thread(id),
         ] {
             if env.storage().persistent().has(&key) {
                 env.storage()
@@ -855,6 +905,17 @@ impl LeaseVault {
         let lease = load(&env, id);
         let value = lease.liquid + blend_value(&env, &cfg, &lease);
         landlord_part(&lease).min(value).max(0)
+    }
+
+    /// Number of messages on a lease and the hash of the whole thread.
+    pub fn get_thread(env: Env, id: u64) -> Thread {
+        env.storage()
+            .persistent()
+            .get(&DataKey::Thread(id))
+            .unwrap_or(Thread {
+                count: 0,
+                hash: BytesN::from_array(&env, &[0; 32]),
+            })
     }
 
     pub fn get_yield_proposal(env: Env, id: u64) -> Option<YieldProposal> {
@@ -1010,6 +1071,17 @@ fn damage_cap(lease: &Lease) -> i128 {
 
 fn landlord_part(lease: &Lease) -> i128 {
     lease.terms.deposit - lease.terms.rent * lease.months_unpaid as i128
+}
+
+/// Next hash of a message thread: sha256(prev || XDR of the sender's
+/// ScVal || seq as 4 big-endian bytes || payload). The app recomputes it to
+/// show that no message is missing or altered.
+fn thread_hash(env: &Env, prev: &BytesN<32>, from: &Address, seq: u32, payload: &Bytes) -> BytesN<32> {
+    let mut data = Bytes::from_array(env, &prev.to_array());
+    data.append(&from.clone().to_xdr(env));
+    data.extend_from_array(&seq.to_be_bytes());
+    data.append(payload);
+    env.crypto().sha256(&data).into()
 }
 
 fn require_status(env: &Env, lease: &Lease, status: Status) {

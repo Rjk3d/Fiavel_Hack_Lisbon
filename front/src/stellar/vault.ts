@@ -87,6 +87,16 @@ async function v2State(id: bigint): Promise<Pick<Snapshot, 'proposal' | 'ratings
   }
 }
 
+/** Message count and thread hash of a lease, or null on a contract without messages. */
+export async function threadOf(id: bigint): Promise<{ count: number; hash: Uint8Array } | null> {
+  try {
+    const { result } = await reader.get_thread({ id })
+    return { count: Number(result.count), hash: new Uint8Array(result.hash) }
+  } catch {
+    return null
+  }
+}
+
 export interface Reputation {
   count: number
   /** Average score out of 5, or null before any rating. */
@@ -119,6 +129,8 @@ export interface ChainEvent {
   at: string
   tx: string
   data: Record<string, unknown>
+  /** Third topic when there is one: the sender of a message, the rater of a rating. */
+  actor?: string
 }
 
 /** Contract events, oldest first. The RPC keeps about a week of them. */
@@ -143,6 +155,7 @@ export async function contractEvents(): Promise<ChainEvent[]> {
       at: e.ledgerClosedAt,
       tx: e.txHash,
       data: (typeof value === 'object' && value !== null ? value : { value }) as Record<string, unknown>,
+      actor: e.topic[2] ? String(scValToNative(e.topic[2])) : undefined,
     }
   })
 }
@@ -170,6 +183,8 @@ const PLAIN: Record<string, string> = {
   AlreadyConfirmed: 'You already confirmed this.',
   AlreadyRated: 'You already rated this lease.',
   InvalidScore: 'A rating is a whole number from 1 to 5.',
+  UnknownArbiter: 'This arbiter is not on the list approved by this deployment.',
+  InvalidMessage: 'A message must be 1 to about 980 characters.',
 }
 
 export const plainError = (e: unknown) => {

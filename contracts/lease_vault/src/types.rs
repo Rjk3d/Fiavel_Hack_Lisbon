@@ -19,6 +19,8 @@ pub enum DataKey {
     BufferLocked(u64),
     /// Track record of an arbiter's decisions.
     ArbiterRecord(Address),
+    /// Message thread between the two parties of a lease.
+    Thread(u64),
 }
 
 /// Set once by the constructor. The pool cannot be changed afterwards:
@@ -202,6 +204,17 @@ pub struct ArbiterRecord {
     pub to_landlord: i128,
 }
 
+/// The message thread of a lease. Messages themselves are only in events,
+/// encrypted for the two parties; the contract keeps their number and a
+/// running hash, so nobody can drop or rewrite a message afterwards.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct Thread {
+    pub count: u32,
+    /// sha256(previous hash || sender || seq || payload), zero when empty.
+    pub hash: BytesN<32>,
+}
+
 #[contracterror]
 #[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
 #[repr(u32)]
@@ -221,4 +234,5 @@ pub enum Error {
     AlreadyRated = 13,
     InvalidScore = 14,
     UnknownArbiter = 15,
+    InvalidMessage = 16,
 }
