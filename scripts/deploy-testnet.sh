@@ -13,6 +13,10 @@ BLEND_POOL=CCEBVDYM32YNYCVNRXQKDFFPISJJCV557CDZEIRBEE4NCV4KHPQ44HGF
 USDC=CAQCFVLOBK5GIULPNZRGATJJMIZL5BSP7X5YJVMGCPTUEPFM4AVSRCJU
 BLEND_FAUCET=https://ewqw4hx7oa.execute-api.us-east-1.amazonaws.com/getAssets
 DISPUTE_BOND=200000000 # 20 USDC, 7 decimals
+# Ratings build reputation only on leases at least this long and this large.
+# Testnet demo values: a 3-month demo lease (3 x 60 s) with 100 USDC. Mainnet: e.g. 90 days.
+MIN_RATED_DURATION=180
+MIN_RATED_DEPOSIT=1000000000 # 100 USDC
 WASM=target/wasm32v1-none/release/lease_vault.wasm
 
 identity() {
@@ -61,7 +65,8 @@ echo "== deploy LeaseVault"
 [ -f "$WASM" ] || stellar contract build --package lease_vault
 VAULT=$(stellar contract deploy --wasm "$WASM" --source fiavel-deployer --network $NETWORK \
   --alias lease_vault -- \
-  --token $USDC --pool $BLEND_POOL --arbitration_fund "$FUND" --dispute_bond $DISPUTE_BOND)
+  --token $USDC --pool $BLEND_POOL --arbitration_fund "$FUND" --dispute_bond $DISPUTE_BOND \
+  --min_rated_duration $MIN_RATED_DURATION --min_rated_deposit $MIN_RATED_DEPOSIT)
 echo "LeaseVault: $VAULT"
 
 mkdir -p deployments
@@ -75,6 +80,8 @@ cat > deployments/testnet.json <<EOF
   "usdcClassic": "USDC:GATALTGTWIOT6BUDBCZM3Q4OQ4BO2COLOAZ7IYSKPLC2PMSOPPGF5V56",
   "blendPool": "$BLEND_POOL",
   "disputeBond": "$DISPUTE_BOND",
+  "minRatedDuration": "$MIN_RATED_DURATION",
+  "minRatedDeposit": "$MIN_RATED_DEPOSIT",
   "accounts": {
     "deployer": "$DEPLOYER",
     "landlord": "$LANDLORD",

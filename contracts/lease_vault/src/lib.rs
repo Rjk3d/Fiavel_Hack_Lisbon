@@ -166,6 +166,8 @@ pub struct Rated {
     pub rater: Address,
     pub ratee: Address,
     pub score: u32,
+    /// False when the lease was below the rating thresholds.
+    pub counted: bool,
 }
 
 #[contract]
@@ -179,8 +181,10 @@ impl LeaseVault {
         pool: Address,
         arbitration_fund: Address,
         dispute_bond: i128,
+        min_rated_duration: u64,
+        min_rated_deposit: i128,
     ) {
-        if dispute_bond < 0 {
+        if dispute_bond < 0 || min_rated_deposit < 0 {
             panic_with_error!(&env, Error::InvalidAmount);
         }
         let reserve = BlendPoolClient::new(&env, &pool).get_reserve(&token);
@@ -190,6 +194,8 @@ impl LeaseVault {
             reserve_index: reserve.config.index,
             arbitration_fund,
             dispute_bond,
+            min_rated_duration,
+            min_rated_deposit,
         };
         env.storage().instance().set(&DataKey::Config, &config);
         env.storage().instance().set(&DataKey::NextId, &0u64);
@@ -276,6 +282,9 @@ impl LeaseVault {
         lease.rent_escrow = terms.rent;
         lease.liquid = terms.deposit + buffer;
         lease.status = Status::Funded;
+        if buffer > 0 {
+            keep_persistent(&env, &DataKey::BufferLocked(id), &true);
+        }
 
         if yield_active {
             // One month of rent and the buffer never leave the contract.
@@ -618,7 +627,13 @@ impl LeaseVault {
             keep,
             tenant_share_bps,
             landlord_share_bps,
-            buffer: lease.terms.deposit * lease.terms.buffer_bps as i128 / BPS,
+            // A tenant who already locked the buffer (yield accepted at funding,
+            // then stopped) does not lock it a second time.
+            buffer: if env.storage().persistent().has(&DataKey::BufferLocked(id)) {
+                0
+            } else {
+                lease.terms.deposit * lease.terms.buffer_bps as i128 / BPS
+            },
             tenant_ok: false,
             landlord_ok: false,
         };
@@ -660,6 +675,9 @@ impl LeaseVault {
         lease.shares = blend_supply(&env, &cfg, to_place);
         lease.placed = to_place;
         lease.liquid = lease.liquid - to_place + p.buffer;
+        if p.buffer > 0 {
+            keep_persistent(&env, &DataKey::BufferLocked(id), &true);
+        }
         lease.yield_active = true;
         env.storage()
             .persistent()
@@ -715,16 +733,31 @@ impl LeaseVault {
             ratings.by_tenant = Some(score);
             lease.landlord.clone()
         };
-        let mut rep = Self::get_reputation(env.clone(), ratee.clone());
-        rep.count += 1;
-        rep.total += score;
         keep_persistent(&env, &DataKey::Ratings(id), &ratings);
-        keep_persistent(&env, &DataKey::Reputation(ratee.clone()), &rep);
+
+        // The score is always recorded on the lease; it only builds reputation
+        // when the lease was long and large enough to be costly to fake.
+        let cfg = config(&env);
+        let duration = lease.terms.months as u64 * lease.terms.period;
+        let counted = duration >= cfg.min_rated_duration && lease.terms.deposit >= cfg.min_rated_deposit;
+        if counted {
+            let mut rep = Self::get_reputation(env.clone(), ratee.clone());
+            rep.count += 1;
+            rep.total += score;
+            rep.lease_seconds += duration;
+            let pair = DataKey::RatedBy(ratee.clone(), who.clone());
+            if !env.storage().persistent().has(&pair) {
+                rep.counterparties += 1;
+                keep_persistent(&env, &pair, &true);
+            }
+            keep_persistent(&env, &DataKey::Reputation(ratee.clone()), &rep);
+        }
         Rated {
             id,
             rater: who,
             ratee,
             score,
+            counted,
         }
         .publish(&env);
     }

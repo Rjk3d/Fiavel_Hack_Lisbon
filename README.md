@@ -65,7 +65,7 @@ Track: **Genesis + Stellar Composed**.
 
 | Component | Role | Testnet ID |
 |---|---|---|
-| LeaseVault (Soroban, built during the hack) | Holds the first rent and the guarantee, enforces every lease rule | [`CCPX4XT2EJQQKG2JCFPIWHQDFLO46QTBN5BP7VQQW22HEMZO7NTBTKMD`](https://stellar.expert/explorer/testnet/contract/CCPX4XT2EJQQKG2JCFPIWHQDFLO46QTBN5BP7VQQW22HEMZO7NTBTKMD) |
+| LeaseVault (Soroban, built during the hack) | Holds the first rent and the guarantee, enforces every lease rule | [`CDR2QYELO3W3BEPTAJVTZQEB7IFB6PIYH5DVITIGN6SYTVYVYKXGBRXP`](https://stellar.expert/explorer/testnet/contract/CDR2QYELO3W3BEPTAJVTZQEB7IFB6PIYH5DVITIGN6SYTVYVYKXGBRXP) (v2) |
 | USDC (SAC) | Rent and guarantee asset. On testnet this is Blend's test USDC (`USDC:GATALT…F5V56`), the asset its pool lends | [`CAQCFVLOBK5GIULPNZRGATJJMIZL5BSP7X5YJVMGCPTUEPFM4AVSRCJU`](https://stellar.expert/explorer/testnet/contract/CAQCFVLOBK5GIULPNZRGATJJMIZL5BSP7X5YJVMGCPTUEPFM4AVSRCJU) |
 | Blend v2 pool | Opt-in yield, accepted by both parties. Guarantee minus one month is supplied; one month and a 5 % tenant buffer stay liquid | [`CCEBVDYM32YNYCVNRXQKDFFPISJJCV557CDZEIRBEE4NCV4KHPQ44HGF`](https://stellar.expert/explorer/testnet/contract/CCEBVDYM32YNYCVNRXQKDFFPISJJCV557CDZEIRBEE4NCV4KHPQ44HGF) |
 | Lease Coordinator wallet (Stellar CLI) | Calls the public deadline functions; pays fees only, holds no user funds | see [`deployments/testnet.json`](deployments/testnet.json) |
@@ -89,10 +89,10 @@ Track: **Genesis + Stellar Composed**.
 | `resolve` | arbiter | dispute open | splits the disputed amount between the two parties only; bond forfeited if the landlord gets < 50 % |
 | `release` | anyone | claim window passed, no claim | guarantee + tenant's yield share to the tenant |
 | `exit_blend` | parties anytime; anyone if at risk | loss > 0.1 % or pool utilization ≥ 95 % | brings the position back; gain shared 70 / 20 / 10 |
-| `propose_yield` | tenant or landlord | lease active, nothing invested, keeps ≥ 1 month liquid | records how much stays in the contract and the yield split; the tenant's buffer is locked if the tenant proposes |
+| `propose_yield` | tenant or landlord | lease active, nothing invested, keeps ≥ 1 month liquid | records how much stays in the contract and the yield split; the tenant's buffer is locked if the tenant proposes, and never a second time if it is already in the contract |
 | `approve_yield` | the other party | a proposal is pending | second approval lends `liquid − keep` on Blend; nothing moves before both approved |
 | `cancel_yield` | tenant or landlord | a proposal is pending | drops it and refunds a locked buffer (also done automatically by `end_lease`) |
-| `rate` | tenant or landlord | lease over (ended, claimed, disputed or closed), once per party | scores the other party 1–5; adds to their public reputation (`get_reputation`) |
+| `rate` | tenant or landlord | lease over (ended, claimed, disputed or closed), once per party | scores the other party 1–5, recorded on the lease. It counts towards public reputation (`get_reputation`: score, leases, distinct counterparties, time rented) only if the lease met the minimum length and guarantee set at deploy (testnet: 180 s and 100 USDC) |
 
 Durations are lease parameters, so the demo runs with 1 month = 60 seconds.
 
@@ -113,6 +113,7 @@ bash scripts/deploy-testnet.sh
 stellar contract bindings typescript --wasm target/wasm32v1-none/release/lease_vault.wasm \
   --output-dir packages/lease-vault-client --overwrite
 cd packages/lease-vault-client && npm install && npm run build && cd ../..
+# after regenerating the client, restart the web app with `npm run dev -- --force` (Vite caches it)
 
 # Agents
 cd agents && npm install
@@ -163,7 +164,21 @@ The agents are deterministic: `src/rules.ts` mirrors every condition of the cont
 
 ## On-chain evidence (testnet)
 
-Last demo run (lease #0 on LeaseVault `CCPX4XT2…TKMD`), from [`deployments/testnet-demo.json`](deployments/testnet-demo.json):
+LeaseVault v2 (`CDR2QYEL…GBRXP`), lease #0 played in the web app, then lease #1 for a rating below the thresholds:
+
+| Step | Transaction |
+|---|---|
+| Landlord proposes to invest 100 USDC mid-lease | [a11139a7…](https://stellar.expert/explorer/testnet/tx/a11139a74ab75e19ad6cf23a4c6171e5933e6e954acd87ecb851f0bb93babbc7) |
+| Tenant approves: buffer locked, 100 USDC supplied to Blend | [5056e64b…](https://stellar.expert/explorer/testnet/tx/5056e64b2ba6ae52422a8becc3816f92842b6fd38a5b7d0b92c83323456618e6) |
+| Tenant stops the option (Blend withdrawal, real gain of 59 stroops) | [a61980a4…](https://stellar.expert/explorer/testnet/tx/a61980a4526da3fd2d359b76cba75543cb56153c8118dd675292903eddca776f) |
+| New proposal: no second buffer asked | [c9214da1…](https://stellar.expert/explorer/testnet/tx/c9214da102db66a424024fc30a0912a33dac2bb62440f565112050f694f93c79) |
+| Landlord approves: 110 USDC supplied | [c092611f…](https://stellar.expert/explorer/testnet/tx/c092611f0e0cdefd96c9717547d0b6a9d766cf2af47281caa22848e85023b9be) |
+| Unpaid month taken from the liquid part | [0f3c41e4…](https://stellar.expert/explorer/testnet/tx/0f3c41e468cb6e48d1ce544f1a782cd867b6c7ad3f4dfb244b8ca3a09a75c23e) |
+| Ratings, counted (3-month lease) | [ec91d1aa…](https://stellar.expert/explorer/testnet/tx/ec91d1aa6f19c5027a7ac4b2ed16142dd0c062211aca5b839633bc114dc6abe5), [327b125a…](https://stellar.expert/explorer/testnet/tx/327b125a514e52c2c99d98644f20f80a641f2210a5d7e2d30d4e51c5af673da6) |
+| Release: back from Blend, refund to the tenant | [bed082ad…](https://stellar.expert/explorer/testnet/tx/bed082ada5e1f0e78713c5b83546e4779637908601408e61af90a36017b0811c) |
+| Rating on a 1-minute lease: recorded, not counted | [cd13c0c0…](https://stellar.expert/explorer/testnet/tx/cd13c0c0e28573a93471c27b84560264e5f5c407711f2ab85f8486dcff80f9c9) |
+
+Earlier demo run (lease #0 on LeaseVault v1 `CCPX4XT2…TKMD`, by the agents' CLI), from [`deployments/testnet-demo.json`](deployments/testnet-demo.json):
 
 | Step | Transaction |
 |---|---|

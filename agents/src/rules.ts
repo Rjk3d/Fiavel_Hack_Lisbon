@@ -48,12 +48,12 @@ export interface YieldProposal {
   landlord_ok: boolean;
 }
 
-/** Same shape as the contract's LeaseRatings (`get_ratings`). */
+/** Same shape as the contract's LeaseRatings (`get_ratings`). The chain returns null for "not yet". */
 export interface LeaseRatings {
   /** Score the tenant gave the landlord. */
-  by_tenant?: number;
+  by_tenant?: number | null;
   /** Score the landlord gave the tenant. */
-  by_landlord?: number;
+  by_landlord?: number | null;
 }
 
 export interface Snapshot {
@@ -143,6 +143,19 @@ export function timeline(lease: Lease) {
     endAt: start + t.months * period,
     claimWindowEnd: n(lease.ended_at) + n(t.claim_window),
   };
+}
+
+/**
+ * Buffer the tenant would lock by approving an investment now. Zero when the
+ * buffer is already in the contract (yield accepted at funding, then stopped):
+ * the contract never takes it twice. Seen as guarantee money above the deposit
+ * once unpaid months are added back.
+ */
+export function bufferToLock(lease: Lease): bigint {
+  const t = lease.terms;
+  const buffer = (t.deposit * BigInt(t.buffer_bps)) / 10_000n;
+  const held = lease.liquid + lease.placed + BigInt(lease.months_unpaid) * t.rent;
+  return held - t.deposit >= buffer && buffer > 0n ? 0n : buffer;
 }
 
 export function phaseOf(lease: Lease): Phase {
@@ -362,8 +375,8 @@ export function analyze(s: Snapshot): Insight {
   }
 
   if (s.v2 && lease.tenant && ["claim_window", "awaiting_response", "in_dispute", "closed"].includes(phase)) {
-    if (s.ratings?.by_tenant === undefined) act({ fn: "rate", role: "tenant", label: "Rate your landlord (1 to 5)" });
-    if (s.ratings?.by_landlord === undefined) act({ fn: "rate", role: "landlord", label: "Rate your tenant (1 to 5)" });
+    if (s.ratings?.by_tenant == null) act({ fn: "rate", role: "tenant", label: "Rate your landlord (1 to 5)" });
+    if (s.ratings?.by_landlord == null) act({ fn: "rate", role: "landlord", label: "Rate your tenant (1 to 5)" });
   }
 
   out.deadlines.sort((a, b) => a.at - b.at);

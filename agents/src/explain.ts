@@ -121,7 +121,9 @@ export function explainRule(rule: RuleId, { lease, disputeBond }: Context): stri
     case "rating":
       return (
         `Once the lease is over, the tenant and the landlord each rate the other from 1 to 5, once. ` +
-        `Only the two parties of a funded lease can rate, so a reputation cannot be faked without a real rental.`
+        `A score always shows on the lease, but it only counts towards reputation if the lease met the minimum length ` +
+        `and guarantee set for this deployment. Reputation also shows how many different parties gave the scores, ` +
+        `so five stars from the same friend stand out.`
       );
     case "yield_exit":
       return (

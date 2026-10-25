@@ -13,6 +13,10 @@ pub enum DataKey {
     Ratings(u64),
     /// Running reputation of an address, across every lease.
     Reputation(Address),
+    /// Set once (ratee, rater) has counted towards the ratee's reputation.
+    RatedBy(Address, Address),
+    /// The tenant's yield buffer is already in the contract for this lease.
+    BufferLocked(u64),
 }
 
 /// Set once by the constructor. The pool cannot be changed afterwards:
@@ -30,6 +34,12 @@ pub struct Config {
     pub arbitration_fund: Address,
     /// Bond the landlord posts with a damage claim.
     pub dispute_bond: i128,
+    /// A rating only counts towards reputation if the lease lasted at least
+    /// this long (months × period, seconds) ...
+    pub min_rated_duration: u64,
+    /// ... and held at least this guarantee. Below either, faking a good
+    /// reputation with a second wallet would cost nothing.
+    pub min_rated_deposit: i128,
 }
 
 /// Fixed by the landlord at creation and accepted by the tenant when funding.
@@ -150,12 +160,16 @@ pub struct LeaseRatings {
     pub by_landlord: Option<u32>,
 }
 
-/// Sum and number of the scores an address received.
+/// Scores an address received on leases that met the rating thresholds.
 #[contracttype]
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct Reputation {
     pub count: u32,
     pub total: u32,
+    /// Different addresses that rated it: five stars from one friend show.
+    pub counterparties: u32,
+    /// Total duration of the rated leases, in seconds.
+    pub lease_seconds: u64,
 }
 
 #[contracterror]

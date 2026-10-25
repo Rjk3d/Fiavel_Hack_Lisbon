@@ -3,7 +3,7 @@ import { describe, it } from "node:test";
 import type { Claim, Lease, Status } from "lease-vault-client";
 import { explainRule, ruleFor, RULES } from "../src/explain.js";
 import { checkAction } from "../src/guards.js";
-import { actionsFor, analyze, coordinatorDuties, usdc, type Snapshot } from "../src/rules.js";
+import { actionsFor, analyze, bufferToLock, coordinatorDuties, usdc, type Snapshot } from "../src/rules.js";
 
 const U = 10_000_000n;
 const T0 = 1_000;
@@ -165,6 +165,10 @@ describe("rule engine", () => {
     assert.equal(checkAction(s, "landlord", "rate", { score: 6 }).ok, false);
     assert.equal(checkAction(s, "landlord", "rate", { score: 4 }).ok, true);
     assert.ok(!fns(s, "arbiter").includes("rate"));
+    // The chain returns null, not undefined, for a score not given yet.
+    const fromChain = snap(ended, T0 + 10, { v2: true, ratings: { by_tenant: null, by_landlord: 4 } });
+    assert.ok(fns(fromChain, "tenant").includes("rate"));
+    assert.ok(!fns(fromChain, "landlord").includes("rate"));
   });
 });
 
@@ -186,5 +190,16 @@ describe("rule explanations", () => {
     assert.equal(ruleFor("can I have a cat?"), undefined);
     assert.equal(ruleFor("how do ratings work"), "rating");
     assert.equal(ruleFor("approve the investment"), "invest_during_lease");
+  });
+});
+
+describe('investment buffer', () => {
+  it('asks for the buffer only if it is not already in the contract', () => {
+    // No yield at funding: 200 held for a 200 guarantee, the 10 buffer is still to lock.
+    assert.equal(bufferToLock(lease('Active', { liquid: 200n * U })), 10n * U);
+    // Yield accepted at funding then stopped: 210 held, nothing more to lock.
+    assert.equal(bufferToLock(lease('Active', { liquid: 210n * U })), 0n);
+    // Same, after one unpaid month was taken from the guarantee.
+    assert.equal(bufferToLock(lease('Active', { liquid: 110n * U, months_unpaid: 1 })), 0n);
   });
 });

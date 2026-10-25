@@ -17,6 +17,9 @@ const DEPOSIT: i128 = 1_300 * U;
 const BUFFER: i128 = 65 * U; // 5 % of the deposit
 const BOND: i128 = 20 * U;
 const T0: u64 = 1_000;
+/// Rating thresholds of the fixture: the 3-minute, 1,300 USDC test lease counts.
+const MIN_RATED_DURATION: u64 = 180;
+const MIN_RATED_DEPOSIT: i128 = 100 * U;
 
 /// Contract functions panic with a typed error; clients see it as this.
 fn err(e: Error) -> soroban_sdk::Error {
@@ -190,7 +193,14 @@ fn setup() -> Setup {
     let fund = Address::generate(&env);
     let vault_id = env.register(
         LeaseVault,
-        (token_id.clone(), pool_id.clone(), fund.clone(), BOND),
+        (
+            token_id.clone(),
+            pool_id.clone(),
+            fund.clone(),
+            BOND,
+            MIN_RATED_DURATION,
+            MIN_RATED_DEPOSIT,
+        ),
     );
 
     let s = Setup {
@@ -818,24 +828,40 @@ fn parties_rate_each_other_once_after_the_lease() {
     );
     assert_eq!(
         s.vault.get_reputation(&s.landlord),
-        Reputation { count: 1, total: 5 }
+        Reputation {
+            count: 1,
+            total: 5,
+            counterparties: 1,
+            lease_seconds: 180
+        }
     );
     assert_eq!(
         s.vault.get_reputation(&s.tenant),
-        Reputation { count: 1, total: 4 }
+        Reputation {
+            count: 1,
+            total: 4,
+            counterparties: 1,
+            lease_seconds: 180
+        }
     );
     assert_eq!(
         s.vault.try_rate(&id, &s.tenant, &1),
         Err(Ok(err(Error::AlreadyRated)))
     );
 
-    // A second lease (same fixture clock) adds to the same reputation.
+    // A second lease with the same tenant adds to the score and the time,
+    // not to the number of different counterparties.
     s.at(T0);
     let id2 = s.ended_lease(false);
     s.vault.rate(&id2, &s.tenant, &3);
     assert_eq!(
         s.vault.get_reputation(&s.landlord),
-        Reputation { count: 2, total: 8 }
+        Reputation {
+            count: 2,
+            total: 8,
+            counterparties: 1,
+            lease_seconds: 360
+        }
     );
 }
 
@@ -866,4 +892,50 @@ fn ratings_are_limited_to_real_parties_after_the_lease() {
         Err(Ok(err(Error::InvalidScore)))
     );
     assert_eq!(s.vault.get_reputation(&s.stranger), Reputation::default());
+}
+
+#[test]
+fn short_or_small_leases_are_rated_but_build_no_reputation() {
+    let s = setup();
+    // One month of 60 s: below the 180 s threshold.
+    let mut short = s.terms(false);
+    short.months = 1;
+    // 3 months but a guarantee under 100 USDC.
+    let mut small = s.terms(false);
+    small.rent = 10 * U;
+    small.deposit = 50 * U;
+    for terms in [short, small] {
+        s.at(T0);
+        let id = s.vault.create_lease(&s.landlord, &terms);
+        s.vault.fund(&id, &s.tenant, &false);
+        s.vault.confirm_move_in(&id, &s.tenant, &s.hash(1));
+        s.vault.confirm_move_in(&id, &s.landlord, &s.hash(1));
+        for _ in 1..terms.months {
+            s.vault.pay_rent(&id);
+        }
+        s.at(T0 + terms.months as u64 * 60);
+        s.vault.end_lease(&id, &s.tenant, &None);
+        s.vault.rate(&id, &s.tenant, &5);
+        // Recorded on the lease, not counted.
+        assert_eq!(s.vault.get_ratings(&id).by_tenant, Some(5));
+        assert_eq!(s.vault.get_reputation(&s.landlord), Reputation::default());
+    }
+}
+
+#[test]
+fn the_tenant_buffer_is_never_locked_twice() {
+    let s = setup();
+    // Yield accepted at funding: the buffer is locked then.
+    let id = s.active_lease(true);
+    s.vault.exit_blend(&id, &s.tenant);
+    let tenant_before = s.bal(&s.tenant);
+
+    // A new proposal later does not ask for it again.
+    s.vault.propose_yield(&id, &s.tenant, &RENT, &7_000, &2_000);
+    assert_eq!(s.vault.get_yield_proposal(&id).unwrap().buffer, 0);
+    s.vault.approve_yield(&id, &s.landlord);
+    assert_eq!(s.bal(&s.tenant), tenant_before);
+    let lease = s.vault.get_lease(&id);
+    assert_eq!(lease.liquid + lease.placed, DEPOSIT + BUFFER);
+    assert_eq!(s.vault.guarantee_value(&id), DEPOSIT + BUFFER);
 }

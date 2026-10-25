@@ -4,6 +4,7 @@ import { reputationOf, type Reputation } from '../../stellar/vault'
 import { cx } from '../../lib/cx'
 import { useLive, type LeaseView } from '../../state/live'
 import { short } from '../../stellar/config'
+import { duration } from '../../stellar/format'
 
 /** Stars for a score out of 5 (fractions shown as a partial star). */
 export function Stars({ value, size = 16 }: { value: number; size?: number }) {
@@ -50,7 +51,7 @@ export function ReputationBadge({ address, compact }: { address: string | undefi
       <Stars value={rep.average} size={compact ? 13 : 15} />
       <span className="tnum font-semibold">{rep.average.toFixed(1)}</span>
       <span className="text-ink-muted">
-        · {rep.count} lease{rep.count > 1 ? 's' : ''}
+        · {rep.count} lease{rep.count > 1 ? 's' : ''} · {rep.counterparties} {rep.counterparties > 1 ? 'different parties' : 'party'} · {duration(rep.leaseSeconds)} rented
       </span>
     </span>
   )
@@ -67,7 +68,7 @@ export function PartiesCard({ view }: { view: LeaseView }) {
   return (
     <section className="card p-5 sm:p-6">
       <p className="text-[16px] font-semibold">Parties & reputation</p>
-      <p className="mt-0.5 text-[13px] text-ink-muted">Scores can only come from the other party of a real lease, once it is over.</p>
+      <p className="mt-0.5 text-[13px] text-ink-muted">Scores come only from the other party of a lease, once it is over. They count towards reputation only above a minimum lease length and guarantee, so faking one costs real time and money.</p>
       <ul className="mt-4 space-y-3">
         {rows.map((p) => (
           <li key={p.role} className="rounded-2xl bg-canvas px-4 py-3">
@@ -77,7 +78,7 @@ export function PartiesCard({ view }: { view: LeaseView }) {
             </div>
             <div className="mt-1.5 flex flex-wrap items-center justify-between gap-2">
               {p.address ? <ReputationBadge address={p.address} /> : <span className="text-[12px] text-ink-muted">—</span>}
-              {p.received !== undefined && (
+              {p.received != null && (
                 <span className="inline-flex items-center gap-1.5 rounded-full bg-white px-2.5 py-1 text-[12px] font-semibold">
                   This lease: <Stars value={p.received} size={12} />
                 </span>

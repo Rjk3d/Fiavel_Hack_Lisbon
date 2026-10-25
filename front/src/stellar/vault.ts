@@ -66,13 +66,22 @@ export interface Reputation {
   count: number
   /** Average score out of 5, or null before any rating. */
   average: number | null
+  /** Different addresses that rated it. */
+  counterparties: number
+  /** Total duration of the rated leases, in seconds. */
+  leaseSeconds: number
 }
 
 /** Scores an address received across all leases, or null on a pre-v2 deployment. */
 export async function reputationOf(address: string): Promise<Reputation | null> {
   try {
     const r = (await reader.get_reputation({ who: address })).result
-    return { count: r.count, average: r.count ? r.total / r.count : null }
+    return {
+      count: r.count,
+      average: r.count ? r.total / r.count : null,
+      counterparties: r.counterparties,
+      leaseSeconds: Number(r.lease_seconds),
+    }
   } catch {
     return null
   }

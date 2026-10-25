@@ -129,7 +129,12 @@ const EVENT_TEXT: Record<string, (d: Record<string, unknown>) => [string, string
   yield_proposed: (d) => ['Investment proposed', `${usdc(BigInt(d.keep as bigint))} would stay in the contract · waiting for the other party`, 'deposit', 'brand'],
   yield_approved: () => ['Investment approved', 'One party approved the proposal', 'deposit', 'brand'],
   yield_cancelled: (d) => ['Investment proposal withdrawn', BigInt(d.refunded as bigint) > 0n ? `${usdc(BigInt(d.refunded as bigint))} buffer back to the tenant` : 'Nothing was invested', 'deposit', 'neutral'],
-  rated: (d) => [`Rated ${Number(d.score)}/5`, 'A party of the lease rated the other', 'review', 'success'],
+  rated: (d) => [
+    `Rated ${Number(d.score)}/5`,
+    d.counted === false ? 'Recorded on the lease · below the thresholds, not counted in reputation' : "Counted in the rated party's reputation",
+    'review',
+    'success',
+  ],
   blend_exited: (d) => ['Back from Blend', `Yield ${usdc(BigInt(d.gain as bigint), { decimals: 7 })}`, 'deposit', 'brand'],
 }
 

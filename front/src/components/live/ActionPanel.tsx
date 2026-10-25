@@ -21,7 +21,7 @@ import {
   XCircle,
   type LucideIcon,
 } from 'lucide-react'
-import { actionsFor, type Action, type ContractFn } from '@agents/rules'
+import { actionsFor, bufferToLock, type Action, type ContractFn } from '@agents/rules'
 import { checkAction } from '@agents/guards'
 import { explainRule, type RuleId } from '@agents/explain'
 import { Button } from '../ui/Button'
@@ -322,7 +322,7 @@ export function ActionDialog({ view, action, onClose }: { view: LeaseView; actio
         <InvestForm
           liquid={lease.liquid}
           rent={t.rent}
-          buffer={(t.deposit * BigInt(t.buffer_bps)) / 10_000n}
+          buffer={bufferToLock(lease)}
           keep={keep}
           setKeep={setKeep}
           tenantPct={tenantPct}
@@ -476,8 +476,10 @@ function InvestForm(p: {
         </div>
       </div>
       <p className="text-[12px] leading-[17px] text-ink-muted">
-        Nothing moves until the other party approves. On approval the tenant locks a {usdc(p.buffer)} buffer that absorbs a Blend loss first;
-        withdrawing the proposal gives it back.
+        Nothing moves until the other party approves.{' '}
+        {p.buffer > 0n
+          ? `On approval the tenant locks a ${usdc(p.buffer)} buffer that absorbs a Blend loss first; withdrawing the proposal gives it back.`
+          : "The tenant's buffer is already in the contract from earlier: nothing more is locked."}
       </p>
     </div>
   )
