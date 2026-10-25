@@ -26,6 +26,7 @@ function FundingContent({ view, acceptYield = false, onClose }: { view: LeaseVie
   const [error, setError] = useState('')
   const [acknowledged, setAcknowledged] = useState(false)
   const [now, setNow] = useState(Date.now())
+  const [recoveryBalance, setRecoveryBalance] = useState<bigint | null>(null)
   const running = useRef(false)
   const mounted = useRef(true)
   const effectiveYield = attempt?.acceptYield ?? quote?.acceptYield ?? acceptYield
@@ -74,6 +75,15 @@ function FundingContent({ view, acceptYield = false, onClose }: { view: LeaseVie
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [engine, pending])
 
+  useEffect(() => {
+    if (!attempt?.swap || attempt.stage === 'funded') return
+    let valid = true
+    void engine.getWalletBalances().then(state => {
+      if (valid) setRecoveryBalance(state.assets.find(asset => assetKey(asset.asset) === assetKey(engine.ports.targetAsset))?.spendable ?? 0n)
+    }).catch(() => { if (valid) setRecoveryBalance(null) })
+    return () => { valid = false }
+  }, [engine, attempt?.stage, attempt?.swap])
+
   const requestQuote = (asset: AssetId) => work('Refreshing executable quote…', async () => {
     const next = await engine.getExactOutputQuote(asset, acceptYield)
     if (mounted.current) { setAttempt(null); setQuote(next); setAcknowledged(false) }
@@ -108,6 +118,7 @@ function FundingContent({ view, acceptYield = false, onClose }: { view: LeaseVie
     {quote && <div className="mt-5"><div className="flex flex-wrap items-center justify-between gap-2"><h3 className="text-[18px] font-semibold">Review {quote.kind === 'direct' ? 'direct USDC funding' : 'conversion and escrow funding'}</h3><Pill tone={quote.expires > now ? 'brand' : 'danger'}>{quote.expires > now ? `${Math.ceil((quote.expires - now) / 1000)}s remaining` : 'Quote expired'}</Pill></div><FactRows rows={[{ label: 'Expected source amount', value: `${decimal(quote.expected)} ${quote.input.code}` }, { label: 'Maximum source spend', value: `${decimal(quote.maximum)} ${quote.input.code}` }, ...(quote.kind === 'path' ? [{ label: 'Exact USDC received in your wallet', value: usdc(quote.receive, { decimals: 7 }) }, { label: 'Existing USDC applied', value: usdc(quote.required - quote.receive, { decimals: 7 }) }, { label: 'Executable rate (USDC / source unit)', value: decimal(quote.receive * UNIT / quote.expected) }, { label: 'Conversion network fee', value: `${decimal(quote.fee)} XLM` }, { label: 'Slippage limit', value: `${quote.slippageBps} basis points` }] : []), { label: 'LeaseVault receives', value: usdc(quote.required, { decimals: 7 }) }, { label: 'Funding transaction fee ceiling', value: `${decimal(FUND_FEE_CAP)} XLM` }]}/><p className="mt-3 text-[12px] leading-5 text-ink-muted">{quote.kind === 'path' ? 'The executable source amount includes the route’s conversion cost. Horizon does not provide a separate price-impact or fee breakdown; none is invented. The swap receives USDC into your own wallet. Escrow funding needs a second, separate approval.' : 'You already hold the required USDC. No conversion is needed.'} The exact Soroban resource fee is simulated before funding and must stay below the displayed ceiling; the ceiling is reserved, not an estimated charge.</p><Button className="mt-3" size="sm" variant="secondary" disabled={!!busy} onClick={() => void requestQuote(quote.input)}>Refresh quote</Button></div>}
 
     {attempt && <section className="mt-5 space-y-3" aria-live="polite"><Pill tone={attempt.stage === 'funded' ? 'success' : 'warning'}>{attempt.stage === 'funded' ? 'Escrow verified on-chain' : 'Payment recovery saved'}</Pill><ol className="space-y-2 text-[14px]"><li>1. {attempt.swap ? `Conversion: ${['swap-pending', 'swap-failed'].includes(attempt.stage) ? attempt.stage === 'swap-failed' ? 'failed / expired on ledger' : 'awaiting confirmation' : 'confirmed'}` : 'Direct USDC · no conversion'}</li><li>2. Escrow funding: {attempt.stage === 'funded' ? 'confirmed and contract state verified' : attempt.stage === 'fund-pending' ? 'submitted / awaiting verification' : attempt.stage === 'fund-failed' ? 'failed · converted USDC is not verified as escrowed' : 'not submitted'}</li></ol>
+      {attempt.swap && attempt.stage !== 'funded' && <FactRows rows={[{ label: 'Exact USDC receive in the saved conversion', value: usdc(BigInt(attempt.receive), { decimals: 7 }) }, { label: 'Current spendable USDC in this wallet', value: recoveryBalance === null ? 'Unavailable · balance not inferred' : usdc(recoveryBalance, { decimals: 7 }) }, { label: 'Conversion recipient you control', value: <span className="break-all font-mono text-[10px]">{attempt.scope.payer}</span> }]}/>}
       {attempt.stage === 'funded' ? <div className="rounded-2xl bg-success-tint p-4 text-success"><CheckCircle2 size={22}/><p className="mt-2 font-semibold">LeaseVault confirms the funded lease.</p><p className="mt-1 text-[13px]">{usdc(BigInt(attempt.required))} funded under this lease. No landlord payout was initiated by this flow.</p></div> : <p className="rounded-2xl bg-warning-tint p-4 text-[13px] leading-5 text-warning">{attempt.swap ? 'If the conversion is confirmed, the resulting USDC was credited to your wallet. It is not protected by escrow until the contract funding is verified. You may close this dialog and return to resume with the same wallet. Check the current balance if it changed elsewhere.' : 'The payment attempt is saved. A submitted transaction may still be pending; do not start another payment until its status is known.'}</p>}
       {transactionLinks && transactionLinks.map(link => link && <a key={link.tx.hash} href={explorerTx(link.tx.hash)} target="_blank" rel="noreferrer" className="flex items-start gap-2 break-all text-[12px] text-brand"><ExternalLink size={14}/><span>{link.label}: {link.tx.hash}</span></a>)}
       {attempt.error && <p className="text-[13px] text-warning">{attempt.error}</p>}

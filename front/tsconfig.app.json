@@ -24,6 +24,7 @@
     "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.app.tsbuildinfo",
     "baseUrl": ".",
     "paths": {
+      "@escrow/*": ["../packages/escrow-domain/src/*"],
       "@agents/*": [
         "../agents/src/*"
       ],
@@ -37,6 +38,7 @@
   },
   "include": [
     "src",
+    "../packages/escrow-domain/src/**/*.ts",
     "../agents/src/rules.ts",
     "../agents/src/explain.ts",
     "../agents/src/guards.ts"

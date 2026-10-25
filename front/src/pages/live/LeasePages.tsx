@@ -18,6 +18,7 @@ import { useLive, ROLE_LABEL, ROLE_PERSON, type LeaseView } from '../../state/li
 import { NETWORK, explorerAccount, explorerContract, explorerTx, short } from '../../stellar/config'
 import { getLease } from '../../stellar/vault'
 import { clock, duration, relative, usdc } from '../../stellar/format'
+import { EscrowDetails } from '../../components/live/EscrowDetails'
 
 export function LiveOverview() {
   const live = useLive()
@@ -346,6 +347,7 @@ function ChainDetails({ view }: { view: LeaseView }) {
   return (
     <section className="card p-5 sm:p-6">
       <SectionHeader title="On Stellar" sub="Everything above is read from these accounts and contracts" />
+      {view.escrow && <EscrowDetails state={view.escrow}/>}
       <FactRows
         rows={[
           link('LeaseVault contract', explorerContract(NETWORK.leaseVault), short(NETWORK.leaseVault)),

@@ -1,8 +1,17 @@
-import { assetKey, assertCanFund, assertQuote, bestPath, ceilBps, scopeKey, totalFor, validateSpend, QUOTE_MS, type AssetId, type Attempt, type AttemptStore, type FundingPorts, type Quote, type SupportedAsset } from './domain'
+import { assetKey, assertCanFund, assertQuoteRequirements, bestPath, ceilBps, scopeKey, totalFor, validateSpend, QUOTE_MS, type AssetId, type Attempt, type AttemptStore, type FundingPorts, type Quote, type SupportedAsset } from './domain'
 
 const busy = new Set<string>()
 export class FundingEngine {
   constructor(readonly ports: FundingPorts, readonly store: AttemptStore) {}
+  private async requirements(acceptYield: boolean) {
+    if (this.ports.requirements) return this.ports.requirements(acceptYield)
+    // Backward-compatible bridge for saved LeaseVault attempts/test ports.
+    if (!this.ports.lease) throw new Error('An explicit provider funding requirement is required.')
+    const lease = await this.ports.lease()
+    assertCanFund(lease, this.ports.scope.payer, Math.floor(this.ports.now() / 1000))
+    return { amount: totalFor(lease, acceptYield), revision: lease.created_at.toString() }
+  }
+  private persist(attempt: Attempt) { this.store.save(attempt); this.ports.persistAttempt?.(attempt) }
   private async lock<T>(work: () => Promise<T>): Promise<T> {
     const key = scopeKey(this.ports.scope)
     if (busy.has(key)) throw new Error('A funding request is already running for this wallet and lease.')
@@ -38,9 +47,8 @@ export class FundingEngine {
   async getExactOutputQuote(input: AssetId, acceptYield = false, slippageBps = 50): Promise<Quote> {
     if (!Number.isInteger(slippageBps) || slippageBps < 0 || slippageBps > 100) throw new Error('Maximum allowed slippage is 1%.')
     await this.ports.checkNetwork()
-    const lease = await this.ports.lease()
-    assertCanFund(lease, this.ports.scope.payer, Math.floor(this.ports.now() / 1000))
-    const required = totalFor(lease, acceptYield)
+    const requirement = await this.requirements(acceptYield)
+    const required = requirement.amount
     const wallet = await this.ports.wallet()
     const isDirect = assetKey(input) === assetKey(this.ports.targetAsset)
     const held = wallet.assets.find(asset => assetKey(asset.asset) === assetKey(this.ports.targetAsset))?.spendable ?? 0n
@@ -49,16 +57,15 @@ export class FundingEngine {
     const path = isDirect ? undefined : bestPath(await this.ports.paths(input, receive), input, receive)
     if (!isDirect && !path) throw new Error('No executable route can deliver the required USDC amount. No conversion was submitted.')
     const expected = isDirect ? required : path!.inputAmount
-    const quote: Quote = { scope: { ...this.ports.scope }, kind: isDirect ? 'direct' : 'path', input, required, receive, expected, maximum: isDirect ? required : ceilBps(expected, slippageBps), path: path?.path ?? [], expires: this.ports.now() + QUOTE_MS, slippageBps, fee: wallet.fee, acceptYield, createdAt: lease.created_at.toString() }
+    const quote: Quote = { scope: { ...this.ports.scope }, kind: isDirect ? 'direct' : 'path', input, required, receive, expected, maximum: isDirect ? required : ceilBps(expected, slippageBps), path: path?.path ?? [], expires: this.ports.now() + QUOTE_MS, slippageBps, fee: wallet.fee, acceptYield, createdAt: requirement.revision }
     validateSpend(wallet, quote)
     return quote
   }
   async validateQuote(quote: Quote): Promise<void> {
     await this.ports.checkNetwork()
-    const lease = await this.ports.lease()
-    assertQuote(quote, this.ports.scope, lease, this.ports.now())
+    const requirement = await this.requirements(quote.acceptYield)
+    assertQuoteRequirements(quote, this.ports.scope, requirement, this.ports.now())
     if ((quote.kind === 'direct') !== (assetKey(quote.input) === assetKey(this.ports.targetAsset))) throw new Error('Source asset/issuer does not match the selected funding route.')
-    assertCanFund(lease, this.ports.scope.payer, Math.floor(this.ports.now() / 1000))
     const wallet = await this.ports.wallet()
     validateSpend(wallet, quote)
     if (wallet.fee > quote.fee) throw new Error('Network fees changed. Review a fresh quote.')
@@ -77,13 +84,14 @@ export class FundingEngine {
       // A successful swap must never be replaced by another swap, including after fund failure.
       if (old?.swap && old.stage !== 'swap-failed') throw new Error('USDC may already have been converted. Recover the existing attempt.')
       await this.validateQuote(quote)
+      this.ports.beforeStart?.(quote)
       const attempt: Attempt = { version: 1, scope: { ...this.ports.scope }, required: quote.required.toString(), receive: quote.receive.toString(), source: quote.input, sourceMax: quote.maximum.toString(), acceptYield: quote.acceptYield, createdAt: quote.createdAt, stage: 'reviewed' }
-      this.store.save(attempt) // Fail before signing/submission if durable storage is unavailable.
+      this.persist(attempt) // Fail before signing/submission if durable storage is unavailable.
       if (quote.kind === 'direct') return attempt
       const tx = await this.ports.prepareSwap(quote)
-      assertQuote(quote, this.ports.scope, await this.ports.lease(), this.ports.now())
-      attempt.swap = tx; attempt.stage = 'swap-pending'; this.store.save(attempt)
-      try { await this.ports.submit(tx, 'swap') } catch { attempt.error = 'Submission was not confirmed. Check the saved transaction; do not start a second swap.'; this.store.save(attempt) }
+      assertQuoteRequirements(quote, this.ports.scope, await this.requirements(quote.acceptYield), this.ports.now())
+      attempt.swap = tx; attempt.stage = 'swap-pending'; this.persist(attempt)
+      try { await this.ports.submit(tx, 'swap') } catch { attempt.error = 'Submission was not confirmed. Check the saved transaction; do not start a second swap.'; this.persist(attempt) }
       return this.recover()
     })
   }
@@ -100,7 +108,7 @@ export class FundingEngine {
       const result = await this.ports.status(attempt.swap, 'swap', attempt)
       attempt.stage = result.state === 'confirmed' ? 'swap-confirmed' : result.state === 'failed' ? 'swap-failed' : 'swap-pending'
     }
-    this.store.save(attempt)
+    this.persist(attempt)
     return attempt
   }
   recoverPendingFunding() { return this.lock(() => this.recover()) }
@@ -109,13 +117,12 @@ export class FundingEngine {
       let attempt = await this.recover()
       if (['funded', 'fund-pending', 'swap-pending'].includes(attempt.stage)) return attempt
       if (!['reviewed', 'swap-confirmed', 'fund-failed'].includes(attempt.stage)) throw new Error('A confirmed conversion or a reviewed direct payment is required.')
-      const lease = await this.ports.lease()
-      assertCanFund(lease, this.ports.scope.payer, Math.floor(this.ports.now() / 1000))
-      if (lease.created_at.toString() !== attempt.createdAt || totalFor(lease, attempt.acceptYield).toString() !== attempt.required) throw new Error('Lease terms changed; keep the converted USDC in your wallet.')
+      const requirement = await this.requirements(attempt.acceptYield)
+      if (requirement.revision !== attempt.createdAt || requirement.amount.toString() !== attempt.required) throw new Error('Lease terms changed; keep the converted USDC in your wallet.')
       const tx = await this.ports.prepareFunding(attempt)
       attempt = { ...attempt, fund: tx, stage: 'fund-pending', error: undefined }
-      this.store.save(attempt)
-      try { await this.ports.submit(tx, 'fund') } catch { attempt.error = 'Funding submission is uncertain. Check this transaction before retrying.'; this.store.save(attempt) }
+      this.persist(attempt)
+      try { await this.ports.submit(tx, 'fund') } catch { attempt.error = 'Funding submission is uncertain. Check this transaction before retrying.'; this.persist(attempt) }
       return this.recover()
     })
   }

@@ -51,3 +51,5 @@ Thumbs.db
 
 # ── Agents runtime log ───────────────────────
 agents/journal.jsonl
+# Local escrow DB/journals can contain private financial metadata.
+.escrow-data/

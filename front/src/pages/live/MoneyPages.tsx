@@ -17,6 +17,7 @@ import { FundingDialog } from '../../components/live/FundingDialog'
 import { Button } from '../../components/ui/Button'
 import { fundingScope } from '../../stellar/funding/stellar'
 import { browserAttemptStore } from '../../stellar/funding/storage'
+import { EscrowDetails } from '../../components/live/EscrowDetails'
 
 export function LivePayments() {
   const live = useLive()
@@ -120,6 +121,7 @@ function GuaranteeDetail({ view }: { view: LeaseView }) {
           </p>
           <p className="tnum mt-2 text-[40px] font-semibold leading-none tracking-[-0.03em]">{usdc(view.snap.guaranteeValue)}</p>
           <p className="mt-1 text-[13px] text-ink-muted">Value now, read from the contract and from Blend</p>
+          {view.escrow && <EscrowDetails state={view.escrow}/>}
           <div className="mt-5 grid grid-cols-2 gap-3">
             <Stat icon={<ShieldCheck size={16} />} label="In the contract" value={usdc(y.liquid)} />
             <Stat icon={<Layers size={16} />} label="Lent on Blend" value={usdc(y.placed)} />

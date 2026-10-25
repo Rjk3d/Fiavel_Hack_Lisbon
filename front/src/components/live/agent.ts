@@ -3,6 +3,7 @@ import { checkAction } from '@agents/guards'
 import { explainRule, normalize, ruleFor, ruleLabel, RULES, type Lang, type RuleId } from '@agents/explain'
 import type { LeaseView } from '../../state/live'
 import { NETWORK } from '../../stellar/config'
+import { explainEscrow } from '@escrow/assistant'
 
 /**
  * Tenant Guardian / Landlord Assistant, live version. Deterministic: every answer comes
@@ -134,6 +135,9 @@ export function reply(question: string, role: Role, view: LeaseView | undefined,
   const q = question.toLowerCase().trim()
   const lang = opts.lang ?? detectLang(question) ?? 'en'
   const fr = lang === 'fr'
+  if (view?.escrow && (view.escrow.binding.provider !== 'leasevault' || /trustless|provider|backend|fournisseur|migration/i.test(q))) {
+    return { paragraphs: explainEscrow(view.escrow, lang), suggestions: fr ? ['Quelles conditions de restitution sont vérifiées ?'] : ['Which refund conditions are verified?'] }
+  }
   const nq = normalize(question).trim()
   const suggestions = promptsFor(role, lang)
     .filter((p) => normalize(p) !== nq)
