@@ -33,6 +33,7 @@ import { NETWORK } from '../../stellar/config'
 import { toUnits, usdc } from '../../stellar/format'
 import { sha256 } from '../../stellar/vault'
 import { cx } from '../../lib/cx'
+import { FundingDialog } from './FundingDialog'
 
 const ICON: Record<ContractFn, LucideIcon> = {
   fund: ShieldCheck,
@@ -131,6 +132,11 @@ export function ActionPanel({ view, compact }: { view: LeaseView; compact?: bool
 
 /** One contract call: inputs, the rule it follows, the guard check, then signature. */
 export function ActionDialog({ view, action, onClose }: { view: LeaseView; action: Action; onClose: () => void }) {
+  if (action.fn === 'fund') return <FundingDialog view={view} acceptYield={Boolean(action.args?.accept_yield)} onClose={onClose}/>
+  return <StandardActionDialog view={view} action={action} onClose={onClose}/>
+}
+
+function StandardActionDialog({ view, action, onClose }: { view: LeaseView; action: Action; onClose: () => void }) {
   const live = useLive()
   const { lease, claim } = view.snap
   const t = lease.terms
