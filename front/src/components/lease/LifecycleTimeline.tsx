@@ -38,7 +38,7 @@ export function LifecycleTimeline({
             <div className="pt-1">
               <p className="text-[15px] font-semibold">{s.label}</p>
               <p className="text-[13px] text-ink-muted">
-                {s.date ? formatDate(s.date) : '—'} · {s.hint}
+                {s.dateLabel ?? (s.date ? formatDate(s.date) : '—')} · {s.hint}
               </p>
             </div>
           </li>
@@ -62,7 +62,7 @@ export function LifecycleTimeline({
             <p className={cx('mt-2 text-[12px] font-semibold leading-[15px] sm:text-[13px]', onBrand ? 'text-white' : 'text-ink')}>{s.label}</p>
             {!compact && (
               <p className={cx('mt-0.5 text-[11px] leading-[14px] sm:text-[12px]', onBrand ? 'text-white/65' : 'text-ink-muted')}>
-                {s.date ? formatDate(s.date) : '—'}
+                {s.dateLabel ?? (s.date ? formatDate(s.date) : '—')}
               </p>
             )}
             <span className="sr-only">{s.state === 'done' ? 'completed' : s.state === 'current' ? 'current step' : 'upcoming'}</span>

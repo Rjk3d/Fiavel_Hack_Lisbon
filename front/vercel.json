@@ -1,0 +1,6 @@
+{
+  "rewrites": [
+    { "source": "/blend-faucet", "destination": "/api/blend-faucet" },
+    { "source": "/((?!api/|assets/).*)", "destination": "/index.html" }
+  ]
+}

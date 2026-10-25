@@ -1,48 +1,54 @@
-# Fiável — frontend prototype
+# Fiável — web app
 
-> AI agents for fair rentals. Smart contracts for trust.
+> Fair rentals. Enforced by Stellar, explained by agents.
 
-Interactive prototype of an AI-assisted rental escrow app for tenants and landlords in Lisbon.
-**Frontend only:** all people, payments and events are fictional demo data. No real funds move,
-no backend or AI provider is called, and no Stellar transaction is submitted.
-
-The frontend lives in `front/`; run the commands below from there.
+React + Vite + TypeScript + Tailwind app for tenants, landlords and arbiters, connected live to the
+**LeaseVault** contract on Stellar Testnet. Every number on screen is read from the chain; every action
+is a real, signed testnet transaction.
 
 ## Run
 
 ```bash
+# once, from the repo root: build the generated contract client
+cd packages/lease-vault-client && npm install && npm run build && cd ../..
+
 cd front
 npm install
-npm run dev        # http://localhost:5174
-npm test           # demo agent + lease logic
-npm run build      # type check + production build
+npm run dev        # http://localhost:5174/app
+npm test           # landing demo agent
+npm run build      # type check + production build (prebuild rebuilds the contract client)
 ```
+
+The contract IDs come from `../deployments/testnet.json`. `VITE_LEASE_VAULT_ID`, `VITE_STELLAR_RPC_URL`,
+`VITE_STELLAR_HORIZON_URL` and `VITE_BLEND_FAUCET_URL` override them.
 
 ## Routes
 
 | Route | What |
 |---|---|
-| `/` | Landing page |
-| `/app` | Overview — tenant (Ana) or landlord (Manuel), switch in the sidebar / header |
-| `/app/lease`, `/app/leases/:id` | Lease detail (tenant) / lease list + detail (landlord) |
-| `/app/payments` | Payments, filters, detail drawer, demo payment / review |
-| `/app/deposit` | Protected deposit: lifecycle, release rules, data provenance |
-| `/app/assistant` | Tenant Guardian / Landlord Assistant (`?q=` asks a question) |
-| `/app/activity` | Filterable activity feed |
+| `/` | Landing page (illustrative preview with demo data) |
+| `/app` | Overview for the current role: guarantee, actions, next rent, activity |
+| `/app/lease`, `/app/leases/:id` | Leases, and one lease: actions, deadlines, terms, months, claim, history, on-chain links |
+| `/app/join/:id` | Invite link: the Tenant Guardian explains the terms, the tenant funds |
+| `/app/payments` | Months of every lease, pay rent or take an unpaid month |
+| `/app/deposit` | Guarantee: liquid part, Blend part, yield so far, projection |
+| `/app/assistant` | Tenant Guardian / Landlord Assistant / Arbiter Desk (`?q=` asks a question) |
+| `/app/activity` | Contract events, filterable, each with its transaction |
 
 ## Architecture
 
-- `src/lib/demo-data.ts` — the single seeded scenario (fixed "today": 26 Oct 2026).
-- `src/lib/lease-logic.ts` — derived business rules (next payment, claim deadline, lifecycle), shared by UI and agent.
-- `src/state/demo-store.tsx` — in-memory state + actions (simulate payment, mark received, save claim draft). Replace action bodies with API calls.
-- `src/state/flows.tsx` — the modal flows (payment detail, pay, review, claim), openable from anywhere.
-- `src/lib/services/assistant.ts` — `AssistantService` interface. `demo-agent.ts` is the deterministic implementation;
-  setting `VITE_ASSISTANT_URL` switches to a backend returning the same `AssistantReply` JSON.
-- `src/lib/config.ts` — Stellar settings (`VITE_STELLAR_CONTRACT_ID`, `VITE_STELLAR_LAST_TX`). The UI shows a contract or
-  transaction only when one is configured, and builds explorer links only from a well-formed hash.
+- `src/stellar/` — network config, testnet wallets (one keypair per role in localStorage, funded by Friendbot and
+  Blend's faucet), contract reads (simulations), signed writes, events.
+- `src/state/live.tsx` — the store: wallets, balances, every lease involving them (polled every 5 s), events, and
+  `run()` which signs with the current role and submits.
+- `@agents/rules`, `@agents/explain`, `@agents/guards` — the agents' rule engine, imported from `../agents/src`.
+  The app proposes exactly the calls the contract accepts and refuses the others before building a transaction.
+- `src/components/live/` — action panel and dialogs (one per contract function), cards, lease mappings, the
+  deterministic assistant.
+- `api/blend-faucet.ts` + `vercel.json` — production relay for Blend's faucet (the dev server proxies it).
 
-## Known limitations
+## Wallets
 
-- No authentication, persistence (only the demo role is remembered) or file uploads.
-- The demo agent is keyword-based, not a language model; it says so in the UI.
-- Stellar / Soroban is not connected: the blockchain panel says verification will appear once connected.
+The three wallets are testnet keypairs generated in the browser so one person can play every role. They hold
+testnet assets only. The `Wallet` interface (`src/stellar/wallets.ts`) is the seam for passkey smart accounts
+(OpenZeppelin), which is the next step.

@@ -1,10 +1,11 @@
 import { Route, Routes } from 'react-router-dom'
 import { AppShell } from './components/layout/AppShell'
-import { FlowsProvider } from './state/flows'
 import { LandingPage } from './pages/LandingPage'
-import { PaymentsPage } from './pages/PaymentsPage'
-import { DepositPage } from './pages/DepositPage'
-import { ActivityPage, AssistantPage, LeaseDetailPage, LeasePage, NotFoundPage, OverviewPage } from './pages/AppPages'
+import { NotFoundPage } from './pages/NotFoundPage'
+import { JoinPage, LiveLeaseDetailPage, LiveLeases, LiveOverview } from './pages/live/LeasePages'
+import { LiveActivity, LiveDeposit, LivePayments } from './pages/live/MoneyPages'
+import { LiveAssistant } from './pages/live/AssistantPage'
+import { LiveProvider } from './state/live'
 
 export default function App() {
   return (
@@ -13,18 +14,19 @@ export default function App() {
       <Route
         path="/app"
         element={
-          <FlowsProvider>
+          <LiveProvider>
             <AppShell />
-          </FlowsProvider>
+          </LiveProvider>
         }
       >
-        <Route index element={<OverviewPage />} />
-        <Route path="lease" element={<LeasePage />} />
-        <Route path="leases/:id" element={<LeaseDetailPage />} />
-        <Route path="payments" element={<PaymentsPage />} />
-        <Route path="deposit" element={<DepositPage />} />
-        <Route path="assistant" element={<AssistantPage />} />
-        <Route path="activity" element={<ActivityPage />} />
+        <Route index element={<LiveOverview />} />
+        <Route path="lease" element={<LiveLeases />} />
+        <Route path="leases/:id" element={<LiveLeaseDetailPage />} />
+        <Route path="join/:id" element={<JoinPage />} />
+        <Route path="payments" element={<LivePayments />} />
+        <Route path="deposit" element={<LiveDeposit />} />
+        <Route path="assistant" element={<LiveAssistant />} />
+        <Route path="activity" element={<LiveActivity />} />
         <Route path="*" element={<NotFoundPage />} />
       </Route>
       <Route path="*" element={<LandingPage />} />

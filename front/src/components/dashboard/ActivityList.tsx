@@ -2,6 +2,7 @@ import { CircleDollarSign, FileSignature, FileWarning, PlayCircle, ShieldCheck, 
 import { DemoTag } from '../ui/Pill'
 import { cx } from '../../lib/cx'
 import { formatDate } from '../../lib/formatters'
+import { explorerTx } from '../../stellar/config'
 import type { ActivityEvent, ActivityKind } from '../../lib/types'
 
 const ICONS: Record<ActivityKind, typeof Sparkles> = {
@@ -41,6 +42,14 @@ export function ActivityList({ events, compact }: { events: ActivityEvent[]; com
               <p className="mt-0.5 text-[14px] leading-[20px] text-ink-muted">{e.detail}</p>
               <p className="mt-1 text-[12px] text-[#A29FB0]">
                 {formatDate(e.date)} · {e.time}
+                {e.tx && (
+                  <>
+                    {' · '}
+                    <a href={explorerTx(e.tx)} target="_blank" rel="noreferrer" className="font-semibold text-brand hover:underline">
+                      tx {e.tx.slice(0, 8)}
+                    </a>
+                  </>
+                )}
               </p>
             </div>
           </li>

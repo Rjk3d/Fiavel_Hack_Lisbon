@@ -92,6 +92,8 @@ export interface ActivityEvent {
   visibleTo: Role[]
   tone: 'success' | 'brand' | 'warning' | 'neutral'
   origin: DataOrigin
+  /** Transaction hash, for events read from the chain. */
+  tx?: string
 }
 
 export type ClaimCategory = 'damage' | 'cleaning' | 'unpaid_rent' | 'missing_items' | 'other'

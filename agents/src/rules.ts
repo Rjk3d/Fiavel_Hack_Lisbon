@@ -222,7 +222,7 @@ export function analyze(s: Snapshot): Insight {
       out.headline =
         settled < months
           ? `Lease active: ${settled} of ${months} months settled.`
-          : `Lease active: all ${months} months settled.`;
+          : `Lease active: ${months === 1 ? "the month is" : `all ${months} months are`} settled.`;
       if (lease.months_unpaid > 0) {
         out.facts.push(`${lease.months_unpaid} month(s) were taken from the guarantee.`);
       }

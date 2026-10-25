@@ -1,11 +1,13 @@
 import { createContext, useCallback, useContext, useState, type ReactNode } from 'react'
-import { CheckCircle2, Info, X } from 'lucide-react'
+import { CheckCircle2, ExternalLink, Info, X } from 'lucide-react'
 
 type ToastTone = 'info' | 'demo'
 interface Toast {
   id: number
   title: string
   body?: string
+  /** Link shown under the body, e.g. the transaction on Stellar Expert. */
+  href?: string
   tone: ToastTone
 }
 
@@ -17,7 +19,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   const push = useCallback((t: Omit<Toast, 'id' | 'tone'> & { tone?: ToastTone }) => {
     const id = Date.now() + Math.random()
     setToasts((all) => [...all.slice(-2), { tone: 'info', ...t, id }])
-    setTimeout(() => dismiss(id), 4800)
+    setTimeout(() => dismiss(id), t.href ? 9000 : 4800)
   }, [])
 
   return (
@@ -41,6 +43,11 @@ export function ToastProvider({ children }: { children: ReactNode }) {
             <div className="min-w-0 flex-1">
               <p className="text-[14px] font-semibold">{t.title}</p>
               {t.body && <p className="mt-0.5 text-[13px] leading-[18px] text-white/70">{t.body}</p>}
+              {t.href && (
+                <a href={t.href} target="_blank" rel="noreferrer" className="mt-1 inline-flex items-center gap-1 text-[13px] font-semibold text-brand-soft hover:underline">
+                  View on Stellar Expert <ExternalLink size={12} />
+                </a>
+              )}
             </div>
             <button onClick={() => dismiss(t.id)} className="-mr-1 rounded-full p-1 text-white/60 hover:text-white" aria-label="Dismiss">
               <X size={16} />

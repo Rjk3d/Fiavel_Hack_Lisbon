@@ -1,7 +1,7 @@
 import { useNavigate } from 'react-router-dom'
 import { ArrowUpRight } from 'lucide-react'
 import { AgentMark } from './AgentMark'
-import { DemoTag } from '../ui/Pill'
+import { Pill } from '../ui/Pill'
 import type { Role } from '../../lib/types'
 
 /** Compact AI nudge on dashboards. Each button opens the assistant with that question asked. */
@@ -14,9 +14,9 @@ export function AIInsightCard({ role, message, prompts }: { role: Role; message:
         <AgentMark size={40} />
         <div className="min-w-0 flex-1">
           <p className="text-[15px] font-semibold">{role === 'tenant' ? 'Tenant Guardian' : 'Landlord Assistant'}</p>
-          <p className="text-[12px] text-ink-muted">Explains and prepares · you decide</p>
+          <p className="text-[12px] text-ink-muted">Explains and prepares · you sign</p>
         </div>
-        <DemoTag>Demo AI</DemoTag>
+        <Pill tone="brand">Rule-based</Pill>
       </div>
       <p className="mt-4 text-[16px] leading-[25px] text-ink">{message}</p>
       <div className="mt-5 flex flex-wrap gap-2">

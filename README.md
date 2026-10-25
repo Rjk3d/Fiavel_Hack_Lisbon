@@ -1,23 +1,24 @@
 # Fiável
 
-> AI agents for fair rentals. Smart contracts for trust.
+> Fair rentals. Enforced by Stellar, explained by agents.
 
-Rental escrow for tenants and landlords in Lisbon: deposits held under transparent rules,
-AI assistants that explain and prepare, Stellar Soroban for supported fund movements.
+Rental escrow for tenants and landlords in Lisbon: the guarantee is held by a Soroban contract under
+transparent rules, deterministic agents explain and prepare every action, and nothing moves without a signature.
 Built for HackMeridian.
 
 ## Branches
 
 | Branch | Content |
 |---|---|
-| `main` | Stable base of the project |
-| `front` | Frontend prototype (`front/`, Vite + React + TypeScript + Tailwind, demo data) |
+| `main` | Contract, agents and the web app connected to Stellar Testnet |
+| `front` | The original front-end prototype (demo data), merged into `main` and connected |
+| `frontend-yacin` | An alternative front-end prototype (`frontend/`), not merged: same screens, `front/` was kept as the base |
 
 ## Repository layout
 
 | Path | Content |
 |---|---|
-| `front/` | Frontend (on the `front` branch for now) |
+| `front/` | Web app (React + Vite + Tailwind), connected live to LeaseVault on testnet. See [`front/README.md`](front/README.md) |
 | `contracts/lease_vault/` | **LeaseVault**, the Soroban contract (Rust), with its unit tests and a mock Blend pool |
 | `contracts/hello_world/` | Pre-hack toolchain check |
 | `packages/lease-vault-client/` | TypeScript client generated from the contract (`stellar contract bindings typescript`), for the front and the agents |
@@ -112,9 +113,12 @@ cd packages/lease-vault-client && npm install && npm run build && cd ../..
 # Agents
 cd agents && npm install
 npm test                           # rule engine and guards, offline
-```
+cd ..
 
-_Front setup: on the `front` branch._
+# Web app (needs the client above)
+cd front && npm install
+npm run dev                        # http://localhost:5174/app
+```
 
 ## Environment variables
 
@@ -123,6 +127,21 @@ See [`.env.example`](.env.example). The agents read `deployments/<network>.json`
 ## Demo
 
 _TODO: public URL and video link._
+
+### In the web app
+
+Run `npm run dev` in `front/` and open http://localhost:5174/app. The app creates three testnet wallets in the browser (tenant, landlord, arbiter) and switches between them from the sidebar, so one person can play the whole lease:
+
+1. **Get test funds** for each role (Friendbot XLM and Blend test USDC).
+2. **Landlord → New lease** (demo mode: 1 month = 1 minute, yield option on), then copy the invite link.
+3. Open the invite: the **Tenant Guardian** explains every rule with the lease's own values. **Lock** the first rent and the guarantee, with or without the Blend option.
+4. Tenant then landlord **confirm move-in**: both sign the same inventory hash. Photos are hashed in the browser, never uploaded.
+5. Pay rent from **Payments**. Leave a month unpaid: after the grace period the **Landlord Assistant** proposes to take it from the guarantee. Ask it to "seize the whole guarantee now" to see the refusal.
+6. **End the lease**, then let anyone **release** the guarantee after the claim window, or file a **damage claim**, answer with a counter-offer, and let the **arbiter** split the disputed amount.
+
+Every action shows a toast with its Stellar Expert link. The Activity page is rebuilt from contract events.
+
+### From the command line
 
 The full pitch scenario runs against testnet in about 5 minutes (1 month = 60 s):
 

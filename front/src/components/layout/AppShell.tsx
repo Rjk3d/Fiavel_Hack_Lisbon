@@ -1,14 +1,14 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
-import { Bell, ExternalLink, LogOut, Menu, RotateCcw, X } from 'lucide-react'
+import { Bell, ExternalLink, Menu, X } from 'lucide-react'
 import { NAV } from './nav'
-import { RoleSwitcher } from './RoleSwitcher'
 import { Avatar, Logo } from '../ui/misc'
 import { Pill } from '../ui/Pill'
-import { useDemo } from '../../state/demo-store'
-import { useToast } from '../ui/Toast'
-import { userFor } from '../../lib/lease-logic'
+import { useLive, ROLE_LABEL, ROLE_PERSON } from '../../state/live'
+import { LiveRoleSwitcher, WalletCard, networkLine } from '../live/cards'
+import { explorerAccount } from '../../stellar/config'
 import { cx } from '../../lib/cx'
+import { ErrorBoundary } from '../ui/ErrorBoundary'
 
 export function AppShell() {
   const { pathname } = useLocation()
@@ -24,7 +24,9 @@ export function AppShell() {
       <div className="md:pl-[84px] lg:pl-[264px]">
         <TopBar onMenu={() => setDrawer(true)} />
         <main className="mx-auto w-full max-w-[1180px] px-4 pb-[calc(104px+env(safe-area-inset-bottom))] pt-5 sm:px-6 md:pb-12 lg:px-10 lg:pt-8">
-          <Outlet />
+          <ErrorBoundary resetKey={pathname}>
+            <Outlet />
+          </ErrorBoundary>
         </main>
       </div>
       <BottomNav />
@@ -34,7 +36,7 @@ export function AppShell() {
 }
 
 function Sidebar() {
-  const { role } = useDemo()
+  const { role } = useLive()
   return (
     <aside className="fixed inset-y-0 left-0 z-30 hidden w-[84px] flex-col border-r border-line bg-white md:flex lg:w-[264px]">
       <Link to="/" className="flex h-[72px] items-center justify-center px-6 lg:justify-start" aria-label="Fiável home">
@@ -64,21 +66,20 @@ function Sidebar() {
           </NavLink>
         ))}
       </nav>
-      <div className="hidden p-4 lg:block">
-        <div className="rounded-xl2 bg-canvas p-4">
-          <p className="text-[12px] font-semibold uppercase tracking-[0.1em] text-ink-muted">Demo view</p>
-          <div className="mt-3">
-            <RoleSwitcher full />
-          </div>
-          <p className="mt-3 text-[12px] leading-[17px] text-ink-muted">Fictional data. No real funds or Stellar transactions.</p>
+      <div className="hidden space-y-3 p-4 lg:block">
+        <div>
+          <p className="mb-2 text-[12px] font-semibold uppercase tracking-[0.1em] text-ink-muted">Acting as</p>
+          <LiveRoleSwitcher full />
         </div>
+        <WalletCard />
+        <p className="px-1 text-[11px] leading-[16px] text-ink-muted">{networkLine}. Test assets only.</p>
       </div>
     </aside>
   )
 }
 
 function TopBar({ onMenu }: { onMenu: () => void }) {
-  const { role } = useDemo()
+  const { role } = useLive()
   return (
     <header className="sticky top-0 z-20 border-b border-line/70 bg-canvas/85 backdrop-blur-xl">
       <div className="mx-auto flex h-16 max-w-[1180px] items-center gap-3 px-4 sm:px-6 lg:h-[72px] lg:px-10">
@@ -93,13 +94,13 @@ function TopBar({ onMenu }: { onMenu: () => void }) {
           <Logo />
         </Link>
         <Pill tone="brand" className="hidden sm:inline-flex" dot>
-          Testnet demo
+          Stellar Testnet · live
         </Pill>
         <div className="flex-1" />
         <div className="hidden sm:block lg:hidden">
-          <RoleSwitcher />
+          <LiveRoleSwitcher />
         </div>
-        <span className="hidden text-[13px] text-ink-muted lg:inline">{role === 'tenant' ? 'Tenant view' : 'Landlord view'}</span>
+        <span className="hidden text-[13px] text-ink-muted lg:inline">{ROLE_LABEL[role]} view</span>
         <NavLink
           to="/app/activity"
           className={({ isActive }) =>
@@ -117,12 +118,11 @@ function TopBar({ onMenu }: { onMenu: () => void }) {
 }
 
 function ProfileMenu() {
-  const { role, resetDemo } = useDemo()
-  const toast = useToast()
+  const { role, wallet } = useLive()
   const navigate = useNavigate()
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
-  const me = userFor(role)
+  const me = ROLE_PERSON[role]
 
   useEffect(() => {
     if (!open) return
@@ -146,7 +146,7 @@ function ProfileMenu() {
         aria-expanded={open}
         aria-label={`Account menu for ${me.name}`}
       >
-        <Avatar initials={me.initials} size={36} tone={role === 'tenant' ? 'brand' : 'ink'} />
+        <Avatar initials={me.initials} size={36} tone={role === 'tenant' ? 'brand' : role === 'landlord' ? 'ink' : 'soft'} />
       </button>
       {open && (
         <div role="menu" className="absolute right-0 top-12 z-40 w-[260px] animate-rise rounded-xl2 border border-line bg-white p-2 shadow-lift">
@@ -156,14 +156,13 @@ function ProfileMenu() {
           </div>
           <div className="h-px bg-line" />
           <MenuItem
-            icon={<RotateCcw size={16} />}
+            icon={<ExternalLink size={16} />}
             onClick={() => {
-              resetDemo()
               setOpen(false)
-              toast({ title: 'Demo data reset', body: 'All simulated actions were cleared.' })
+              window.open(explorerAccount(wallet.address), '_blank', 'noreferrer')
             }}
           >
-            Reset demo data
+            Wallet on Stellar Expert
           </MenuItem>
           <MenuItem
             icon={<ExternalLink size={16} />}
@@ -173,9 +172,6 @@ function ProfileMenu() {
             }}
           >
             Back to website
-          </MenuItem>
-          <MenuItem icon={<LogOut size={16} />} disabled>
-            Sign out <span className="ml-auto text-[11px] text-ink-muted">no accounts in demo</span>
           </MenuItem>
         </div>
       )}
@@ -198,7 +194,7 @@ function MenuItem({ icon, children, onClick, disabled }: { icon: ReactNode; chil
 }
 
 function BottomNav() {
-  const { role } = useDemo()
+  const { role } = useLive()
   return (
     <nav
       aria-label="App"
@@ -230,7 +226,7 @@ function BottomNav() {
 }
 
 function MobileDrawer({ onClose }: { onClose: () => void }) {
-  const { role } = useDemo()
+  const { role } = useLive()
   useEffect(() => {
     const k = (e: KeyboardEvent) => e.key === 'Escape' && onClose()
     document.addEventListener('keydown', k)
@@ -251,8 +247,8 @@ function MobileDrawer({ onClose }: { onClose: () => void }) {
           </button>
         </div>
         <div className="mt-6">
-          <p className="mb-2 text-[12px] font-semibold uppercase tracking-[0.1em] text-ink-muted">Demo view</p>
-          <RoleSwitcher full />
+          <p className="mb-2 text-[12px] font-semibold uppercase tracking-[0.1em] text-ink-muted">Acting as</p>
+          <LiveRoleSwitcher full />
         </div>
         <nav className="mt-6 space-y-1">
           {NAV.map(({ to, label, icon: Icon, end }) => (
@@ -269,11 +265,8 @@ function MobileDrawer({ onClose }: { onClose: () => void }) {
             </NavLink>
           ))}
         </nav>
-        <div className="mt-auto rounded-2xl bg-canvas p-4 text-[12px] leading-[17px] text-ink-muted">
-          <Pill tone="brand" dot>
-            Testnet demo
-          </Pill>
-          <p className="mt-2">Fictional data. No real funds or Stellar transactions.</p>
+        <div className="mt-auto">
+          <WalletCard />
         </div>
       </div>
     </div>

@@ -42,6 +42,8 @@ export interface Milestone {
   date: string | null
   hint: string
   state: MilestoneState
+  /** Overrides the formatted date, e.g. a time for leases measured in minutes. */
+  dateLabel?: string
 }
 
 /** The four-step deposit lifecycle shown on every screen. */

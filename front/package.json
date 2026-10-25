@@ -3,23 +3,27 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
-  "description": "Fiável — AI-assisted rental escrow prototype (frontend only, demo data, Stellar Testnet not connected).",
+  "description": "Fiável web app: React + Vite, connected to the LeaseVault contract on Stellar Testnet.",
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
     "typecheck": "tsc -b --noEmit",
     "test": "vitest run",
-    "build:preview": "VITE_MEMORY_ROUTER=1 vite build && node scripts/inline-preview.mjs"
+    "build:preview": "VITE_MEMORY_ROUTER=1 vite build && node scripts/inline-preview.mjs",
+    "prebuild": "npm --prefix ../packages/lease-vault-client install --no-audit --no-fund && npm --prefix ../packages/lease-vault-client run build"
   },
   "dependencies": {
     "@fontsource-variable/inter": "^5.1.0",
+    "buffer": "^6.0.3",
+    "lease-vault-client": "file:../packages/lease-vault-client",
     "lucide-react": "^0.460.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-router-dom": "^6.28.0"
   },
   "devDependencies": {
+    "@types/node": "^22.20.5",
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",
     "@vitejs/plugin-react": "^4.7.0",
