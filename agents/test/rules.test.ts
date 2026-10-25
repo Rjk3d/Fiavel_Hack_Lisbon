@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import type { Claim, Lease, Status } from "lease-vault-client";
-import { explainRule, ruleFor, RULES } from "../src/explain.js";
+import { explainRule, ruleFor, ruleLabel, RULES } from "../src/explain.js";
 import { checkAction } from "../src/guards.js";
 import { actionsFor, analyze, bufferToLock, coordinatorDuties, damageClaimable, usdc, type Snapshot } from "../src/rules.js";
 
@@ -213,6 +213,36 @@ describe("rule explanations", () => {
     assert.equal(ruleFor("can I have a cat?"), undefined);
     assert.equal(ruleFor("how do ratings work"), "rating");
     assert.equal(ruleFor("approve the investment"), "invest_during_lease");
+  });
+
+  it("explains every rule in French with the same on-chain values", () => {
+    const l = lease("Active");
+    for (const rule of RULES) {
+      const en = explainRule(rule, { lease: l, disputeBond: 20n * U });
+      const fr = explainRule(rule, { lease: l, disputeBond: 20n * U }, "fr");
+      assert.ok(fr.length > 40 && fr !== en, rule);
+      // Every amount quoted in English is quoted in French too.
+      for (const amount of en.match(/\d+\.\d\d USDC/g) ?? []) assert.ok(fr.includes(amount), `${rule}: ${amount}`);
+      assert.ok(ruleLabel(rule, "fr").length > 3, rule);
+    }
+    assert.equal(explainRule("yield", { lease: l, disputeBond: 0n }, "en"), explainRule("yield", { lease: l, disputeBond: 0n }));
+    assert.match(explainRule("unpaid_rent", { lease: l, disputeBond: 0n }, "fr"), /10 seconde\(s\)/);
+    assert.match(explainRule("early_seizure", { lease: l, disputeBond: 0n }, "fr"), /Personne ne peut prendre la garantie/);
+  });
+
+  it("maps French questions to the same rules, with or without accents", () => {
+    assert.equal(ruleFor("Quand est-ce que je récupère ma caution ?", "fr"), "end_of_lease");
+    assert.equal(ruleFor("quand je recupere ma caution", "fr"), "end_of_lease");
+    assert.equal(ruleFor("Saisir toute la caution maintenant", "fr"), "early_seizure");
+    assert.equal(ruleFor("Comment fonctionne une réclamation pour dégâts ?", "fr"), "damage_claim");
+    assert.equal(ruleFor("Que devient la caution de litige ?", "fr"), "dispute_bond");
+    assert.equal(ruleFor("Et si Blend se fait pirater ?", "fr"), "yield_loss");
+    assert.equal(ruleFor("Comment fonctionnent les notes ?", "fr"), "rating");
+    assert.equal(ruleFor("Le loyer est en retard", "fr"), "unpaid_rent");
+    assert.equal(ruleFor("Combien coûte le loyer ?", "fr"), "monthly_rent");
+    assert.equal(ruleFor("Puis-je avoir un chat ?", "fr"), undefined);
+    // English questions keep their English mapping even with French selected.
+    assert.equal(ruleFor("how do ratings work", "fr"), "rating");
   });
 });
 

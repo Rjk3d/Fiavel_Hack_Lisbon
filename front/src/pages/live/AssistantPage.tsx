@@ -4,34 +4,84 @@ import { ArrowUp, FileSignature, RotateCcw, ShieldAlert } from 'lucide-react'
 import type { Action } from '@agents/rules'
 import { AgentMark } from '../../components/ai/AgentMark'
 import { ActionDialog } from '../../components/live/ActionPanel'
-import { PROMPTS, reply, type AgentReply } from '../../components/live/agent'
+import { detectLang, promptsFor, reply, type Lang } from '../../components/live/agent'
+import { append, chatKey, forget, setChatLang, useChatLang, useConversation } from '../../components/live/conversation'
 import { Button } from '../../components/ui/Button'
 import { Pill } from '../../components/ui/Pill'
 import { useLive, ROLE_PERSON } from '../../state/live'
 import { usdc } from '../../stellar/format'
 import { cx } from '../../lib/cx'
 
-type Msg = { id: number; from: 'user'; text: string } | { id: number; from: 'agent'; reply: AgentReply }
+const NAME = {
+  en: { tenant: 'Tenant Guardian', landlord: 'Landlord Assistant', arbiter: 'Arbiter Desk' },
+  fr: { tenant: 'Gardien du locataire', landlord: 'Assistant du propriétaire', arbiter: "Bureau de l'arbitre" },
+} as const
 
-const NAME = { tenant: 'Tenant Guardian', landlord: 'Landlord Assistant', arbiter: 'Arbiter Desk' } as const
+// The assistant's own interface text. Rule explanations come from @agents/explain.
+const UI = {
+  en: {
+    badge: 'Rule-based',
+    for: (who: string) => `For ${who} · answers from the lease on-chain`,
+    hi: (first: string, name: string) => `Hi ${first}. I'm your ${name}.`,
+    intro:
+      "I explain the rules of your lease from what is recorded on-chain and prepare transactions for you to sign. I never sign or move money myself, and I can't do anything the contract forbids.",
+    needsSig: 'Needs your signature',
+    review: 'Review & sign',
+    checked: 'Checked against the lease rules · guarantee',
+    message: 'Message',
+    placeholder: 'Ask about your lease, rent or guarantee…',
+    send: 'Send',
+    clear: 'Clear conversation',
+    note: 'Deterministic agent: no language model. It cannot hallucinate a rule; it says when the lease has none.',
+    tagline: 'Explains, prepares, never decides.',
+    locks: 'Three locks',
+    lock: ['The guard refuses anything outside the lease rules.', 'You sign every transaction yourself.', 'The contract rejects whatever breaks a rule.'],
+  },
+  fr: {
+    badge: 'Basé sur des règles',
+    for: (who: string) => `Pour ${who} · réponses tirées du bail on-chain`,
+    hi: (first: string, name: string) => `Bonjour ${first}. Je suis votre ${name}.`,
+    intro:
+      "J'explique les règles de votre bail à partir de ce qui est inscrit on-chain et je prépare les transactions que vous signez. Je ne signe jamais et je ne déplace jamais d'argent moi-même, et je ne peux rien faire de ce que le contrat interdit.",
+    needsSig: 'Signature requise',
+    review: 'Vérifier et signer',
+    checked: 'Vérifié selon les règles du bail · garantie',
+    message: 'Message à',
+    placeholder: 'Posez une question sur votre bail, le loyer ou la garantie…',
+    send: 'Envoyer',
+    clear: 'Effacer la conversation',
+    note: "Agent déterministe : aucun modèle de langage. Il ne peut pas inventer une règle ; il dit quand le bail n'en a pas.",
+    tagline: 'Explique, prépare, ne décide jamais.',
+    locks: 'Trois verrous',
+    lock: ['Le garde-fou refuse tout ce qui sort des règles du bail.', 'Vous signez vous-même chaque transaction.', 'Le contrat rejette tout ce qui enfreint une règle.'],
+  },
+} as const
 
 export function LiveAssistant() {
   const live = useLive()
   const [params, setParams] = useSearchParams()
   const [leaseId, setLeaseId] = useState<string>(() => live.mine[0]?.id.toString() ?? '')
   const view = live.mine.find((v) => v.id.toString() === leaseId) ?? live.mine[0]
-  const [msgs, setMsgs] = useState<Msg[]>([])
+  // Each (role, lease) pair has its own conversation, kept in memory while the app is open.
+  const key = chatKey(live.role, view?.id)
+  const msgs = useConversation(key)
+  const lang = useChatLang()
   const [input, setInput] = useState('')
   const [dialog, setDialog] = useState<Action | null>(null)
   const scroller = useRef<HTMLDivElement>(null)
-  const name = NAME[live.role]
+  const t = UI[lang]
+  const name = NAME[lang][live.role]
 
   const send = (text: string) => {
     const q = text.trim()
     if (!q) return
     setInput('')
-    const r = reply(q, live.role, view, live.now)
-    setMsgs((m) => [...m, { id: Date.now(), from: 'user', text: q }, { id: Date.now() + 1, from: 'agent', reply: r }])
+    // Answer in the language of the question; the toggle decides when it is ambiguous ("ok?").
+    const l: Lang = detectLang(q) ?? lang
+    setChatLang(l)
+    const last = [...msgs].reverse().find((m) => m.from === 'agent')
+    const topic = last?.from === 'agent' ? last.reply.topic : undefined
+    append(key, q, reply(q, live.role, view, live.now, { lang: l, topic }))
   }
 
   const asked = useRef<string | null>(null)
@@ -49,8 +99,6 @@ export function LiveAssistant() {
     scroller.current?.scrollTo({ top: scroller.current.scrollHeight, behavior: 'smooth' })
   }, [msgs])
 
-  useEffect(() => setMsgs([]), [live.role])
-
   const onKey = (e: KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
       e.preventDefault()
@@ -58,7 +106,7 @@ export function LiveAssistant() {
     }
   }
 
-  const prompts = useMemo(() => PROMPTS[live.role], [live.role])
+  const prompts = useMemo(() => promptsFor(live.role, lang), [live.role, lang])
 
   return (
     <div className="grid h-[calc(100dvh-64px-20px-104px)] min-h-[460px] gap-6 md:h-[calc(100dvh-64px-20px-48px)] lg:h-[calc(100dvh-72px-32px-48px)] lg:grid-cols-[minmax(0,1fr)_300px]">
@@ -67,10 +115,12 @@ export function LiveAssistant() {
           <AgentMark size={38} />
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2">
-              <h1 className="text-[16px] font-semibold">{name}</h1>
-              <Pill tone="brand">Rule-based</Pill>
+              <h1 className="truncate text-[16px] font-semibold">{name}</h1>
+              <Pill tone="brand" className="hidden xl:inline-flex">
+                {t.badge}
+              </Pill>
             </div>
-            <p className="truncate text-[12px] text-ink-muted">For {ROLE_PERSON[live.role].name} · answers from the lease on-chain</p>
+            <p className="truncate text-[12px] text-ink-muted">{t.for(ROLE_PERSON[live.role].name)}</p>
           </div>
           {live.mine.length > 1 && (
             <select value={view?.id.toString()} onChange={(e) => setLeaseId(e.target.value)} className="h-9 rounded-full border border-line bg-white px-3 text-[13px]">
@@ -81,8 +131,25 @@ export function LiveAssistant() {
               ))}
             </select>
           )}
+          <div role="group" aria-label="Language" className="flex h-9 shrink-0 items-center rounded-full border border-line bg-white p-0.5 text-[12px] font-semibold">
+            {(['en', 'fr'] as const).map((l) => (
+              <button
+                key={l}
+                onClick={() => setChatLang(l)}
+                aria-pressed={lang === l}
+                className={cx('h-full rounded-full px-2.5 uppercase', lang === l ? 'bg-brand text-white' : 'text-ink-muted hover:text-ink')}
+              >
+                {l}
+              </button>
+            ))}
+          </div>
           {msgs.length > 0 && (
-            <button onClick={() => setMsgs([])} className="inline-flex h-9 items-center gap-1.5 rounded-full px-3 text-[13px] font-semibold text-ink-muted hover:bg-canvas hover:text-ink">
+            <button
+              onClick={() => forget(key)}
+              title={t.clear}
+              aria-label={t.clear}
+              className="inline-flex h-9 items-center gap-1.5 rounded-full px-3 text-[13px] font-semibold text-ink-muted hover:bg-canvas hover:text-ink"
+            >
               <RotateCcw size={14} />
             </button>
           )}
@@ -90,13 +157,8 @@ export function LiveAssistant() {
 
         <div ref={scroller} className="min-h-0 flex-1 space-y-5 overflow-y-auto px-4 py-5 sm:px-6" aria-live="polite">
           <Bubble>
-            <p className="font-semibold">
-              Hi {ROLE_PERSON[live.role].name.split(' ')[0]}. I'm your {name}.
-            </p>
-            <p className="mt-1">
-              I explain the rules of your lease from what is recorded on-chain and prepare transactions for you to sign. I never sign or move money myself,
-              and I can't do anything the contract forbids.
-            </p>
+            <p className="font-semibold">{t.hi(ROLE_PERSON[live.role].name.split(' ')[0], name)}</p>
+            <p className="mt-1">{t.intro}</p>
           </Bubble>
           {msgs.length === 0 && (
             <div className="ml-11 grid gap-2 sm:grid-cols-2">
@@ -138,13 +200,15 @@ export function LiveAssistant() {
                     <div className="flex items-center gap-3 border-b border-line bg-brand-tint/60 px-4 py-3">
                       <FileSignature size={16} className="text-brand" />
                       <p className="flex-1 text-[14px] font-semibold">{m.reply.action.label}</p>
-                      <Pill tone="brand">Needs your signature</Pill>
+                      <Pill tone="brand">{t.needsSig}</Pill>
                     </div>
                     <div className="flex flex-wrap items-center gap-2 px-4 py-3">
                       <Button size="sm" onClick={() => setDialog(m.reply.action!)} disabled={!!live.busy}>
-                        Review &amp; sign
+                        {t.review}
                       </Button>
-                      <span className="text-[12px] text-ink-muted">Checked against the lease rules · guarantee {usdc(view.snap.guaranteeValue)}</span>
+                      <span className="text-[12px] text-ink-muted">
+                        {t.checked} {usdc(view.snap.guaranteeValue)}
+                      </span>
                     </div>
                   </div>
                 )}
@@ -171,7 +235,7 @@ export function LiveAssistant() {
         >
           <div className="flex items-end gap-2 rounded-[24px] border border-line bg-canvas p-1.5 pl-4 focus-within:border-brand/40">
             <label htmlFor="chat-input" className="sr-only">
-              Message {name}
+              {t.message} {name}
             </label>
             <textarea
               id="chat-input"
@@ -179,14 +243,14 @@ export function LiveAssistant() {
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={onKey}
-              placeholder="Ask about your lease, rent or guarantee…"
+              placeholder={t.placeholder}
               className="max-h-[140px] min-h-[40px] flex-1 resize-none bg-transparent py-2 text-[15px] leading-[22px] outline-none placeholder:text-[#A9A6B6]"
             />
-            <button type="submit" disabled={!input.trim()} className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-brand text-white hover:bg-brand-dark disabled:bg-[#D9D3E8]" aria-label="Send">
+            <button type="submit" disabled={!input.trim()} className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-brand text-white hover:bg-brand-dark disabled:bg-[#D9D3E8]" aria-label={t.send}>
               <ArrowUp size={18} />
             </button>
           </div>
-          <p className="mt-2 px-2 text-[11px] text-ink-muted">Deterministic agent: no language model. It cannot hallucinate a rule; it says when the lease has none.</p>
+          <p className="mt-2 px-2 text-[11px] text-ink-muted">{t.note}</p>
         </form>
       </section>
 
@@ -196,14 +260,16 @@ export function LiveAssistant() {
             <AgentMark size={64} />
           </div>
           <p className="mt-3 font-semibold">{name}</p>
-          <p className="mt-1 text-[13px] leading-[19px] text-ink-muted">Explains, prepares, never decides.</p>
+          <p className="mt-1 text-[13px] leading-[19px] text-ink-muted">{t.tagline}</p>
         </div>
         <div className="rounded-xl2 bg-brand-tint p-5 text-[13px] leading-[19px]">
-          <p className="font-semibold text-brand">Three locks</p>
+          <p className="font-semibold text-brand">{t.locks}</p>
           <ol className="mt-2 space-y-1.5 text-ink-muted">
-            <li>1. The guard refuses anything outside the lease rules.</li>
-            <li>2. You sign every transaction yourself.</li>
-            <li>3. The contract rejects whatever breaks a rule.</li>
+            {t.lock.map((l, i) => (
+              <li key={l}>
+                {i + 1}. {l}
+              </li>
+            ))}
           </ol>
         </div>
       </aside>
