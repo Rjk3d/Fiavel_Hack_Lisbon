@@ -135,6 +135,7 @@ const EVENT_TEXT: Record<string, (d: Record<string, unknown>) => [string, string
     'review',
     'success',
   ],
+  message_sent: () => ['Message sent', 'Encrypted for the tenant and the landlord · moves no money', 'review', 'neutral'],
   blend_exited: (d) => ['Back from Blend', `Yield ${usdc(BigInt(d.gain as bigint), { decimals: 7 })}`, 'deposit', 'brand'],
 }
 

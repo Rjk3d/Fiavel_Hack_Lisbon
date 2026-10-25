@@ -2,7 +2,7 @@
   "name": "fiavel-agents",
   "version": "0.1.0",
   "private": true,
-  "description": "Deterministic agents for Fiável: rule engine, contract tools, lease coordinator and testnet demo",
+  "description": "Deterministic agents for Fi\u00e1vel: rule engine, contract tools, lease coordinator and testnet demo",
   "type": "module",
   "scripts": {
     "test": "node --import tsx --test test/*.test.ts",
@@ -11,7 +11,8 @@
     "demo": "tsx src/demo.ts",
     "status": "tsx src/cli.ts status",
     "explain": "tsx src/cli.ts explain",
-    "history": "tsx src/cli.ts history"
+    "history": "tsx src/cli.ts history",
+    "risks": "tsx src/cli.ts risks"
   },
   "dependencies": {
     "@stellar/stellar-sdk": "16.4.1",

@@ -84,7 +84,27 @@ export async function snapshot(id: bigint, now = Math.floor(Date.now() / 1000)):
     c.guarantee_value({ id }).then((t) => t.result),
     c.blend_at_risk({ id }).then((t) => t.result),
   ]);
-  return { id, lease, claim, now, guaranteeValue: value, blendAtRisk: risk, ...(await v2State(c, id)) };
+  const [v2, v4] = await Promise.all([v2State(c, id), isV4(c, id)]);
+  return { id, lease, claim, now, guaranteeValue: value, blendAtRisk: risk, ...v2, v4 };
+}
+
+/** LeaseVault v4 answers `max_claim`; older deployments fail the simulation. */
+export async function isV4(c: Client, id: bigint): Promise<boolean> {
+  try {
+    await c.max_claim({ id });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** An arbiter's decisions so far, or undefined on a pre-v4 deployment. */
+export async function arbiterRecord(who: string) {
+  try {
+    return (await reader().get_arbiter_record({ who })).result;
+  } catch {
+    return undefined;
+  }
 }
 
 /**

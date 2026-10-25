@@ -21,6 +21,11 @@ MIN_RATED_DEPOSIT=1000000000 # 100 USDC
 # play the mediator in the web app; set to false for a curated registry where
 # only the admin (the deployer here) approves mediators.
 OPEN_REGISTRY=true
+# Every lease window (move-in, claim, response, arbitration) and the period must be
+# between these bounds. Testnet keeps 30 s so the demo can run 1 month = 1 minute;
+# a mainnet deployment would use days (e.g. 259200 = 3 days).
+MIN_WINDOW=30
+MAX_WINDOW=7776000 # 90 days
 WASM=target/wasm32v1-none/release/lease_vault.wasm
 
 identity() {
@@ -71,7 +76,8 @@ VAULT=$(stellar contract deploy --wasm "$WASM" --source fiavel-deployer --networ
   --alias lease_vault -- \
   --token $USDC --pool $BLEND_POOL --arbitration_fund "$FUND" --dispute_bond $DISPUTE_BOND \
   --min_rated_duration $MIN_RATED_DURATION --min_rated_deposit $MIN_RATED_DEPOSIT \
-  --admin "$DEPLOYER" --open_registry $OPEN_REGISTRY --arbiters "[\"$ARBITER\"]")
+  --admin "$DEPLOYER" --open_registry $OPEN_REGISTRY \
+  --min_window $MIN_WINDOW --max_window $MAX_WINDOW --arbiters "[\"$ARBITER\"]")
 echo "LeaseVault: $VAULT"
 
 mkdir -p deployments
@@ -88,6 +94,8 @@ cat > deployments/testnet.json <<EOF
   "minRatedDuration": "$MIN_RATED_DURATION",
   "minRatedDeposit": "$MIN_RATED_DEPOSIT",
   "openRegistry": $OPEN_REGISTRY,
+  "minWindow": "$MIN_WINDOW",
+  "maxWindow": "$MAX_WINDOW",
   "accounts": {
     "deployer": "$DEPLOYER",
     "landlord": "$LANDLORD",

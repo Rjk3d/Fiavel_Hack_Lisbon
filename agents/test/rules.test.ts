@@ -3,7 +3,7 @@ import { describe, it } from "node:test";
 import type { Claim, Lease, Status } from "lease-vault-client";
 import { explainRule, ruleFor, ruleLabel, RULES } from "../src/explain.js";
 import { checkAction } from "../src/guards.js";
-import { actionsFor, analyze, bufferToLock, coordinatorDuties, damageClaimable, usdc, type Snapshot } from "../src/rules.js";
+import { actionsFor, analyze, bufferToLock, coordinatorDuties, damageClaimable, riskFlags, usdc, type Snapshot } from "../src/rules.js";
 
 const U = 10_000_000n;
 const T0 = 1_000;
@@ -192,6 +192,39 @@ describe("rule engine", () => {
     const fromChain = snap(ended, T0 + 10, { v2: true, ratings: { by_tenant: null, by_landlord: 4 } });
     assert.ok(fns(fromChain, "tenant").includes("rate"));
     assert.ok(!fns(fromChain, "landlord").includes("rate"));
+  });
+});
+
+describe("v4: claim cap and risk flags", () => {
+  it("caps a damage claim at the deposit minus months taken, never the buffer", () => {
+    // 200 deposit + 10 buffer held, one month (100) taken earlier.
+    const l = lease("Ended", { months_settled: 3, months_unpaid: 1, liquid: 110n * U });
+    const s = snap(l, T0 + 10, { guaranteeValue: 110n * U });
+    assert.equal(damageClaimable(s), 110n * U); // pre-v4: everything held
+    assert.equal(damageClaimable({ ...s, v4: true }), 100n * U); // v4: buffer out of reach
+    assert.equal(checkAction({ ...s, v4: true }, "landlord", "claim_damage", { amount: 101n * U, evidence: "h" }).ok, false);
+  });
+
+  it("flags terms that leave the tenant no time, judged against the rental month", () => {
+    const base = lease("Created");
+    assert.deepEqual(riskFlags(base), []);
+    const trap = lease("Created", { terms: { ...base.terms, response_window: 5n } });
+    assert.equal(riskFlags(trap)[0].level, "danger");
+    const day = 86_400n;
+    const real = lease("Created", {
+      terms: { ...base.terms, period: 30n * day, response_window: day, claim_window: 90n * day, grace: 0n, deposit: 400n * U },
+    });
+    const texts = riskFlags(real).map((f) => f.text).join(" | ");
+    assert.match(texts, /answer a damage claim is very short/);
+    assert.match(texts, /locked 90 day/);
+    assert.match(texts, /No grace period/);
+    assert.match(texts, /more than three months/);
+  });
+
+  it("flags an arbiter who sides with landlords", () => {
+    const l = lease("Created");
+    assert.deepEqual(riskFlags(l, { cases: 2, claimed: 100n, to_landlord: 100n }), []);
+    assert.equal(riskFlags(l, { cases: 3, claimed: 100n, to_landlord: 90n })[0].level, "danger");
   });
 });
 
