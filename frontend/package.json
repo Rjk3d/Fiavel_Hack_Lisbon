@@ -7,7 +7,9 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test": "node --experimental-strip-types --test tests/*.test.mjs tests/*.test.cjs",
+    "dev:assistant": "node --experimental-strip-types --env-file-if-exists=.env server/server.mjs"
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.3.3",

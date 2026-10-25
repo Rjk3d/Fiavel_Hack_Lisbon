@@ -1,6 +1,7 @@
-import type { AgentReply, Lease, Role, Transaction } from '../types'
+import type { Lease, Transaction } from '../types'
+import type { ContextualAssistant } from '../ai/reply'
 export interface RentalService { getLeases(): Promise<Lease[]>; getTransactions(): Promise<Transaction[]> }
-export interface AssistantService { reply(question: string, role: Role): Promise<AgentReply> }
+export type AssistantService = ContextualAssistant
 export interface StellarService {
   network: 'testnet';
   getVerification(leaseId: string): Promise<{ state: 'disconnected' } | { state: 'confirmed'; contractAddress: string; transactionHash: string }>

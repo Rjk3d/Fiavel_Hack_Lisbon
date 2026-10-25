@@ -1,31 +1,5 @@
-﻿const fs = require('node:fs')
-const ts = require('typescript')
-const assert = require('node:assert/strict')
-// Compile only local pure TypeScript domain modules for Node's built-in assertions.
-require.extensions['.ts'] = (module, filename) => module._compile(ts.transpileModule(fs.readFileSync(filename, 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText, filename)
-const { leases, primaryLease, transactions, scenarioDate } = require('../src/lib/demo-data.ts')
-const { demoAssistant } = require('../src/lib/demo-agent.ts')
-async function main() {
-  assert.equal(primaryLease.deposit, 1800)
-  assert.equal(leases.reduce((sum, lease) => sum + lease.rent, 0), 2000)
-  for (const lease of leases) {
-    const upcoming = transactions.find(t => t.leaseId === lease.id && t.status === 'Upcoming')
-    assert.equal(upcoming.amount, lease.rent)
-    assert.equal(upcoming.date, lease.nextRent)
-    assert.ok(upcoming.date > scenarioDate)
-    assert.ok(lease.start <= scenarioDate && lease.end > scenarioDate)
-  }
-  const payment = await demoAssistant.reply('When is my next rent payment?', 'tenant')
-  assert.ok(payment.text.includes('900') && payment.text.includes('1 Nov 2026'))
-  const deposit = await demoAssistant.reply('How does my deposit get released?', 'tenant')
-  assert.ok(deposit.text.includes('1,800') && deposit.text.includes('No real funds'))
-  const landlord = await demoAssistant.reply('Which payments are coming up?', 'landlord')
-  assert.ok(landlord.text.includes('2,000') && landlord.text.includes('Leo'))
-  const claim = await demoAssistant.reply('What evidence should I prepare?', 'landlord')
-  assert.ok(claim.text.includes('human resolution'))
-  const unrelated = await demoAssistant.reply('What is the weather?', 'tenant')
-  assert.ok(unrelated.text.includes('cannot look up external information'))
-  assert.notEqual(payment.text, deposit.text)
-  console.log('Passed: fixed timeline, lease totals, payment consistency, role-aware assistant, claims, and unrelated prompts.')
-}
-main().catch(error => { console.error(error); process.exitCode = 1 })
+﻿// Compatibility entry point for the original README command.
+const { spawnSync } = require('node:child_process')
+const path = require('node:path')
+const result = spawnSync(process.execPath, ['--experimental-strip-types', '--test', 'tests/assistant.test.mjs', 'tests/render.test.cjs', 'tests/server.test.mjs'], { cwd: path.resolve(__dirname, '..'), stdio: 'inherit' })
+process.exitCode = result.status ?? 1
