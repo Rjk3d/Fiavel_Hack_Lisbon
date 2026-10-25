@@ -147,13 +147,19 @@ export function timeline(lease: Lease) {
 }
 
 /**
- * Largest damage claim the contract accepts after the lease: what is left of the
- * guarantee once the months still unpaid are paid to the landlord.
+ * Largest damage claim the contract accepts after the lease (`max_claim`): the
+ * guarantee minus every month taken from it, including the months still unpaid
+ * that are paid to the landlord first. The tenant's buffer and yield share are
+ * never claimable.
  */
 export function damageClaimable(s: Snapshot): bigint {
   const t = s.lease.terms;
-  const owed = BigInt(t.months - s.lease.months_settled) * t.rent;
-  return s.guaranteeValue > owed ? s.guaranteeValue - owed : 0n;
+  const unsettled = BigInt(Math.max(0, t.months - s.lease.months_settled));
+  const owed = unsettled * t.rent;
+  const held = s.guaranteeValue > owed ? s.guaranteeValue - owed : 0n;
+  const left = t.deposit - t.rent * (BigInt(s.lease.months_unpaid) + unsettled);
+  const cap = left > 0n ? left : 0n;
+  return cap < held ? cap : held;
 }
 
 /**
@@ -396,16 +402,15 @@ export function analyze(s: Snapshot): Insight {
       out.deadlines.push({ label: "Arbiter's deadline", at: end });
       act({ fn: "accept_counter", role: "landlord", label: `Accept the counter-offer (${usdc(offer)})` });
       act({ fn: "resolve", role: "arbiter", label: `Split the ${usdc(c.amount)} between the two parties` });
-      const half = (c.amount + offer) / 2n;
       if (now > end) {
-        act({ fn: "expire_dispute", role: "anyone", label: `The arbiter did not decide: settle at ${usdc(half)}, halfway` });
+        act({ fn: "expire_dispute", role: "anyone", label: `The arbiter did not decide: settle at the tenant's offer (${usdc(offer)})` });
       } else {
         for (const role of ["tenant", "landlord", "arbiter"] as const) {
           block({
             fn: "expire_dispute",
             role,
             label: "Settle without the arbiter",
-            reason: `The arbiter decides ${when(end, now)} at the latest; past that, anyone settles halfway (${usdc(half)} to the landlord).`,
+            reason: `The arbiter decides ${when(end, now)} at the latest; past that, anyone settles at the tenant's offer (${usdc(offer)} to the landlord).`,
             availableAt: end + 1,
           });
         }

@@ -16,7 +16,7 @@ import { EmptyState, FactRows, PageHeader, SectionHeader, Skeleton } from '../..
 import { Pill } from '../../components/ui/Pill'
 import { useLive, ROLE_LABEL, ROLE_PERSON, type LeaseView } from '../../state/live'
 import { NETWORK, explorerAccount, explorerContract, explorerTx, short } from '../../stellar/config'
-import { getLease } from '../../stellar/vault'
+import { getLease, mediatorRegistry, type MediatorRegistry } from '../../stellar/vault'
 import { clock, duration, relative, usdc } from '../../stellar/format'
 
 export function LiveOverview() {
@@ -116,12 +116,52 @@ export function LiveOverview() {
   )
 }
 
+/** Whether this wallet is in the contract's mediator registry, and how to join it on testnet. */
+function MediatorStatus() {
+  const live = useLive()
+  const me = live.wallet.address
+  const [registry, setRegistry] = useState<MediatorRegistry | null | undefined>(undefined)
+  useEffect(() => {
+    mediatorRegistry().then(setRegistry)
+  }, [])
+  if (!registry) return null
+  const approved = registry.arbiters.includes(me)
+  async function join() {
+    const out = await live.run('register_arbiter', { arbiter: me }, 'Joined the mediator registry')
+    if (out) setRegistry(await mediatorRegistry())
+  }
+  return (
+    <section className="card flex flex-col gap-3 p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6">
+      <div>
+        <p className="flex items-center gap-2 text-[15px] font-semibold">
+          <Scale size={16} className="text-brand" /> Mediator registry
+          <Pill tone={approved ? 'success' : 'neutral'}>{approved ? 'Approved' : 'Not listed'}</Pill>
+        </p>
+        <p className="mt-1 text-[13px] text-ink-muted">
+          {approved
+            ? 'Landlords can name you as arbiter. You can only split a disputed amount between the two parties.'
+            : registry.open
+              ? 'Leases can only name approved mediators. On testnet you can join by signing; on mainnet the arbitration fund curates the list.'
+              : 'Leases can only name approved mediators, and the arbitration fund approves them.'}
+          {` ${registry.arbiters.length} approved.`}
+        </p>
+      </div>
+      {!approved && registry.open && (
+        <Button onClick={join} disabled={!!live.busy} icon={<Scale size={16} />}>
+          Join the registry (testnet)
+        </Button>
+      )}
+    </section>
+  )
+}
+
 function ArbiterOverview() {
   const live = useLive()
   const disputes = live.mine.filter((v) => v.snap.lease.status.tag === 'Disputed')
   const others = live.mine.filter((v) => v.snap.lease.status.tag !== 'Disputed')
   return (
     <div className="space-y-6">
+      <MediatorStatus />
       <section className="card p-5 sm:p-6">
         <SectionHeader title="Disputes to resolve" sub="You can only split the disputed amount between the two parties." />
         {disputes.length ? (
@@ -277,7 +317,7 @@ function LeaseDetailBody({ view }: { view: LeaseView }) {
               { label: 'Guarantee', value: usdc(t.deposit) },
               { label: 'Grace period', value: duration(t.grace) },
               { label: 'Claim window / response', value: `${duration(t.claim_window)} / ${duration(t.response_window)}` },
-              { label: 'Arbiter decides within', value: `${duration(t.arbitration_window)}, then halfway by default` },
+              { label: 'Arbiter decides within', value: `${duration(t.arbitration_window)}, then the tenant's offer applies` },
               { label: 'Yield option', value: t.yield_offered ? (l.yield_active ? 'Active on Blend' : 'Offered') : 'Not offered' },
             ]}
           />

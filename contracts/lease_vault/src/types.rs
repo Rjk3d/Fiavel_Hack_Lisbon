@@ -17,6 +17,8 @@ pub enum DataKey {
     RatedBy(Address, Address),
     /// The tenant's yield buffer is already in the contract for this lease.
     BufferLocked(u64),
+    /// Approved mediators, in the order they joined.
+    Arbiters,
 }
 
 /// Set once by the constructor. The pool cannot be changed afterwards:
@@ -40,6 +42,11 @@ pub struct Config {
     /// ... and held at least this guarantee. Below either, faking a good
     /// reputation with a second wallet would cost nothing.
     pub min_rated_deposit: i128,
+    /// Curates the mediator registry (the arbitration fund's operator).
+    pub admin: Address,
+    /// Testnet only: anyone can join the registry by signing, so judges can
+    /// play the mediator. On mainnet it is false and only `admin` approves.
+    pub open_registry: bool,
 }
 
 /// Fixed by the landlord at creation and accepted by the tenant when funding.
@@ -62,7 +69,8 @@ pub struct Terms {
     /// Time the tenant has to answer a damage claim.
     pub response_window: u64,
     /// Time the arbiter has to decide once the tenant countered. Past it,
-    /// anyone can settle the dispute halfway between the claim and the offer.
+    /// anyone can settle the dispute at the tenant's offer: the guarantee
+    /// comes back by default, and inflating a claim earns nothing.
     pub arbitration_window: u64,
     pub arbiter: Address,
     /// Landlord offers to place the guarantee on Blend.
@@ -195,4 +203,8 @@ pub enum Error {
     AlreadyConfirmed = 12,
     AlreadyRated = 13,
     InvalidScore = 14,
+    /// The arbiter named in the terms is not in the mediator registry.
+    ArbiterNotApproved = 15,
+    /// Self-registration is off: only the admin approves mediators.
+    RegistryClosed = 16,
 }

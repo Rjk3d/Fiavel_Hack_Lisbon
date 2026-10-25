@@ -122,13 +122,13 @@ describe("rule engine", () => {
     assert.equal(checkAction(disputed, "tenant", "resolve", { to_landlord: 40n * U }).ok, false);
   });
 
-  it("settles halfway when the arbiter stays silent past the deadline", () => {
+  it("settles at the tenant's offer when the arbiter stays silent past the deadline", () => {
     const claim: Claim = { amount: 80n * U, bond: 20n * U, evidence: Buffer.alloc(32), filed_at: BigInt(T0 + 200), offer: 30n * U, answered_at: BigInt(T0 + 250) };
     const l = lease("Disputed");
     assert.deepEqual(coordinatorDuties(snap(l, T0 + 370, { claim })), []);
     const duties = coordinatorDuties(snap(l, T0 + 371, { claim }));
     assert.deepEqual(duties.map((a) => a.fn), ["expire_dispute"]);
-    assert.match(duties[0].label, /55.00 USDC/);
+    assert.match(duties[0].label, /30.00 USDC/);
   });
 
   it("executes a claim when the tenant stays silent", () => {

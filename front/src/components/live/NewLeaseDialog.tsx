@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { FileSignature, Sparkles, Timer } from 'lucide-react'
 import type { Terms } from 'lease-vault-client'
@@ -7,6 +7,9 @@ import { Dialog } from '../ui/Dialog'
 import { useLive } from '../../state/live'
 import { toUnits, usdc } from '../../stellar/format'
 import { cx } from '../../lib/cx'
+import { mediatorRegistry, type MediatorRegistry } from '../../stellar/vault'
+import { short } from '../../stellar/config'
+import deployment from '@deployments/testnet.json'
 
 /** Durations in seconds. Demo mode compresses a month into a minute so a full lease plays out live. */
 const MODES = {
@@ -24,7 +27,30 @@ export function NewLeaseDialog({ open, onClose }: { open: boolean; onClose: () =
   const [mode, setMode] = useState<keyof typeof MODES>('demo')
   const [yieldOffered, setYield] = useState(true)
   const [arbiter, setArbiter] = useState(live.wallets.arbiter.address)
+  const [registry, setRegistry] = useState<MediatorRegistry | null | undefined>(undefined)
   const [error, setError] = useState<string | null>(null)
+
+  // The contract only accepts an approved mediator: offer those, never a free field.
+  useEffect(() => {
+    if (!open) return
+    let alive = true
+    mediatorRegistry().then((r) => {
+      if (!alive) return
+      setRegistry(r)
+      if (r?.arbiters.length && !r.arbiters.includes(arbiter)) setArbiter(r.arbiters[0])
+    })
+    return () => {
+      alive = false
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open])
+
+  const mediatorName = (a: string) =>
+    a === deployment.accounts.arbiter
+      ? `Fiável mediator · ${short(a)}`
+      : a === live.wallets.arbiter.address
+        ? `Your arbiter wallet · ${short(a)}`
+        : `Mediator · ${short(a)}`
 
   async function submit() {
     setError(null)
@@ -54,6 +80,7 @@ export function NewLeaseDialog({ open, onClose }: { open: boolean; onClose: () =
     if (terms.rent <= 0n || terms.deposit < terms.rent) return setError('The guarantee must be at least one month of rent.')
     if (!Number.isInteger(terms.months) || terms.months < 1 || terms.months > 24) return setError('Between 1 and 24 months.')
     if (!/^G[A-Z2-7]{55}$/.test(terms.arbiter)) return setError('The arbiter must be a Stellar account (G…).')
+    if (registry && !registry.arbiters.includes(terms.arbiter)) return setError('Pick an approved mediator from the registry.')
     const out = await live.run('create_lease', { landlord: live.wallet.address, terms }, 'Lease offer created')
     if (!out) return
     const id = out.result as bigint
@@ -94,7 +121,29 @@ export function NewLeaseDialog({ open, onClose }: { open: boolean; onClose: () =
           <Input value={months} onChange={setMonths} inputMode="numeric" />
         </Field>
         <Field label="Arbiter (approved mediator)">
-          <Input value={arbiter} onChange={setArbiter} mono />
+          {registry ? (
+            <select
+              value={arbiter}
+              onChange={(e) => setArbiter(e.target.value)}
+              className="h-11 w-full rounded-2xl border border-line bg-canvas px-4 text-[14px] outline-none focus:border-brand/40"
+            >
+              {registry.arbiters.map((a) => (
+                <option key={a} value={a}>
+                  {mediatorName(a)}
+                </option>
+              ))}
+            </select>
+          ) : (
+            <Input value={arbiter} onChange={setArbiter} mono />
+          )}
+          {registry && (
+            <span className="mt-1.5 block text-[12px] text-ink-muted">
+              Only mediators in the contract's registry can arbitrate: you cannot name someone yourself.
+              {registry.open && !registry.arbiters.includes(live.wallets.arbiter.address)
+                ? ' On testnet, switch to the Arbiter role to join it.'
+                : ''}
+            </span>
+          )}
         </Field>
       </div>
 
