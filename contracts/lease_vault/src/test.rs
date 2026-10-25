@@ -231,6 +231,7 @@ impl Setup {
             move_in_window: 300,
             claim_window: 120,
             response_window: 60,
+            arbitration_window: 60,
             arbiter: self.arbiter.clone(),
             yield_offered,
             buffer_bps: 500,
@@ -268,6 +269,14 @@ impl Setup {
         self.vault.pay_rent(&id);
         self.at(T0 + 180);
         self.vault.end_lease(&id, &self.tenant, &Some(self.hash(2)));
+        id
+    }
+
+    /// Ended lease released after the claim window, at T0 + 301.
+    fn closed_lease(&self, with_yield: bool) -> u64 {
+        let id = self.ended_lease(with_yield);
+        self.at(T0 + 180 + 121);
+        self.vault.release(&id);
         id
     }
 }
@@ -397,6 +406,70 @@ fn unpaid_rent_is_taken_from_the_guarantee_after_grace() {
     assert_eq!(s.vault.guarantee_value(&id), DEPOSIT - RENT);
 }
 
+#[test]
+fn anyone_can_trigger_an_unpaid_month_for_the_landlord() {
+    let s = setup();
+    let id = s.active_lease(false);
+    let landlord_before = s.bal(&s.landlord);
+    s.at(T0 + 60 + 11);
+    s.vault.claim_unpaid(&id);
+    // No signature was needed: the money can only go to the landlord.
+    assert!(s.env.auths().is_empty());
+    assert_eq!(s.bal(&s.landlord), landlord_before + RENT);
+}
+
+#[test]
+fn release_pays_months_left_unpaid_to_the_landlord_first() {
+    let s = setup();
+    let id = s.active_lease(false);
+    s.vault.pay_rent(&id); // month 2 paid, month 3 never paid
+    s.at(T0 + 180);
+    s.vault.end_lease(&id, &s.tenant, &None);
+    let tenant_before = s.bal(&s.tenant);
+    let landlord_before = s.bal(&s.landlord);
+
+    s.at(T0 + 180 + 121);
+    s.vault.release(&id);
+    assert_eq!(s.bal(&s.landlord), landlord_before + RENT);
+    assert_eq!(s.bal(&s.tenant), tenant_before + DEPOSIT - RENT);
+    let lease = s.vault.get_lease(&id);
+    assert_eq!((lease.months_settled, lease.months_unpaid), (3, 1));
+    assert_eq!(s.bal(&s.vault.address), 0);
+}
+
+#[test]
+fn the_tenant_can_still_pay_late_after_the_end() {
+    let s = setup();
+    let id = s.active_lease(false);
+    s.vault.pay_rent(&id);
+    s.at(T0 + 180);
+    s.vault.end_lease(&id, &s.landlord, &None);
+    s.vault.pay_rent(&id);
+    let tenant_before = s.bal(&s.tenant);
+    s.at(T0 + 180 + 121);
+    s.vault.release(&id);
+    assert_eq!(s.bal(&s.tenant), tenant_before + DEPOSIT);
+    assert_eq!(s.vault.get_lease(&id).months_unpaid, 0);
+}
+
+#[test]
+fn a_damage_claim_comes_after_the_unpaid_months() {
+    let s = setup();
+    let id = s.active_lease(false);
+    s.at(T0 + 180);
+    s.vault.end_lease(&id, &s.tenant, &None);
+    let landlord_before = s.bal(&s.landlord);
+    // Two months unpaid: 1,300 - 2 x 650 leaves nothing to claim for damage.
+    assert_eq!(
+        s.vault.try_claim_damage(&id, &(100 * U), &s.hash(3)),
+        Err(Ok(err(Error::InvalidAmount)))
+    );
+    // The failed call changed nothing; a release pays both months.
+    s.at(T0 + 180 + 121);
+    s.vault.release(&id);
+    assert_eq!(s.bal(&s.landlord), landlord_before + 2 * RENT);
+}
+
 // ── Refusal scene: the guarantee cannot be seized during the lease ──────
 
 #[test]
@@ -509,6 +582,27 @@ fn bond_returns_when_the_landlord_wins_at_least_half() {
     s.vault.resolve(&id, &(200 * U));
     assert_eq!(s.bal(&s.landlord), landlord_before + 200 * U);
     assert_eq!(s.bal(&s.fund), 0);
+}
+
+#[test]
+fn a_silent_arbiter_cannot_lock_the_guarantee() {
+    let s = setup();
+    let id = s.ended_lease(false);
+    let tenant_before = s.bal(&s.tenant);
+    let landlord_before = s.bal(&s.landlord);
+    s.vault.claim_damage(&id, &(400 * U), &s.hash(3));
+    s.vault.respond(&id, &(100 * U)); // answered at T0 + 180
+    s.at(T0 + 180 + 60);
+    assert_eq!(s.vault.try_expire_dispute(&id), Err(Ok(err(Error::TooEarly))));
+    s.at(T0 + 180 + 61);
+    s.vault.expire_dispute(&id);
+
+    // Halfway between 400 and 100, and the bond back to the landlord.
+    assert_eq!(s.bal(&s.landlord), landlord_before + 250 * U);
+    assert_eq!(s.bal(&s.tenant), tenant_before + DEPOSIT - 250 * U);
+    assert_eq!(s.bal(&s.fund), 0);
+    assert_eq!(s.vault.get_lease(&id).status, Status::Closed);
+    assert_eq!(s.vault.try_resolve(&id, &0), Err(Ok(err(Error::WrongStatus))));
 }
 
 // ── Blend yield ─────────────────────────────────────────────────────────
@@ -815,7 +909,7 @@ fn ending_the_lease_drops_a_pending_proposal() {
 #[test]
 fn parties_rate_each_other_once_after_the_lease() {
     let s = setup();
-    let id = s.ended_lease(false);
+    let id = s.closed_lease(false);
 
     s.vault.rate(&id, &s.tenant, &5);
     s.vault.rate(&id, &s.landlord, &4);
@@ -852,7 +946,7 @@ fn parties_rate_each_other_once_after_the_lease() {
     // A second lease with the same tenant adds to the score and the time,
     // not to the number of different counterparties.
     s.at(T0);
-    let id2 = s.ended_lease(false);
+    let id2 = s.closed_lease(false);
     s.vault.rate(&id2, &s.tenant, &3);
     assert_eq!(
         s.vault.get_reputation(&s.landlord),
@@ -874,7 +968,21 @@ fn ratings_are_limited_to_real_parties_after_the_lease() {
         Err(Ok(err(Error::WrongStatus)))
     );
 
-    let id = s.ended_lease(false);
+    // Not while a claim can still be filed or is open.
+    let ended = s.ended_lease(false);
+    assert_eq!(
+        s.vault.try_rate(&ended, &s.tenant, &5),
+        Err(Ok(err(Error::WrongStatus)))
+    );
+    s.vault.claim_damage(&ended, &(100 * U), &s.hash(3));
+    s.vault.respond(&ended, &0);
+    assert_eq!(
+        s.vault.try_rate(&ended, &s.landlord, &1),
+        Err(Ok(err(Error::WrongStatus)))
+    );
+
+    s.at(T0);
+    let id = s.closed_lease(false);
     assert_eq!(
         s.vault.try_rate(&id, &s.stranger, &5),
         Err(Ok(err(Error::NotAParty)))
@@ -915,6 +1023,8 @@ fn short_or_small_leases_are_rated_but_build_no_reputation() {
         }
         s.at(T0 + terms.months as u64 * 60);
         s.vault.end_lease(&id, &s.tenant, &None);
+        s.at(T0 + terms.months as u64 * 60 + 121);
+        s.vault.release(&id);
         s.vault.rate(&id, &s.tenant, &5);
         // Recorded on the lease, not counted.
         assert_eq!(s.vault.get_ratings(&id).by_tenant, Some(5));

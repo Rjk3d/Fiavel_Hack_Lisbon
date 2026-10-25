@@ -3,7 +3,7 @@ import { describe, it } from "node:test";
 import type { Claim, Lease, Status } from "lease-vault-client";
 import { explainRule, ruleFor, RULES } from "../src/explain.js";
 import { checkAction } from "../src/guards.js";
-import { actionsFor, analyze, bufferToLock, coordinatorDuties, usdc, type Snapshot } from "../src/rules.js";
+import { actionsFor, analyze, bufferToLock, coordinatorDuties, damageClaimable, usdc, type Snapshot } from "../src/rules.js";
 
 const U = 10_000_000n;
 const T0 = 1_000;
@@ -24,6 +24,7 @@ function lease(status: Status["tag"], over: Partial<Lease> = {}): Lease {
       move_in_window: 600n,
       claim_window: 60n,
       response_window: 60n,
+      arbitration_window: 120n,
       arbiter: "GARBITER",
       yield_offered: true,
       buffer_bps: 500,
@@ -79,6 +80,18 @@ describe("rule engine", () => {
     // month 1 due at T0 + 60, grace 10 s: claimable strictly after T0 + 70
     assert.ok(!fns(snap(l, T0 + 70), "landlord").includes("claim_unpaid"));
     assert.ok(fns(snap(l, T0 + 71), "landlord").includes("claim_unpaid"));
+    // Public: the coordinator pays it to the landlord without waiting for them.
+    assert.deepEqual(coordinatorDuties(snap(l, T0 + 71)).map((a) => a.fn), ["claim_unpaid"]);
+  });
+
+  it("pays months left unpaid to the landlord before any refund or claim", () => {
+    const l = lease("Ended", { months_settled: 2, ended_at: BigInt(T0 + 180) });
+    const s = snap(l, T0 + 200);
+    assert.equal(damageClaimable(s), 100n * U);
+    assert.ok(fns(s, "tenant").includes("pay_rent"));
+    assert.equal(checkAction(s, "landlord", "claim_damage", { amount: 101n * U, evidence: "x" }).ok, false);
+    const release = actionsFor(analyze(snap(l, T0 + 241)), "anyone").find((a) => a.fn === "release")!;
+    assert.match(release.label, /100.00 USDC unpaid to the landlord/);
   });
 
   it("never offers to seize the guarantee during the lease", () => {
@@ -102,15 +115,24 @@ describe("rule engine", () => {
     assert.equal(checkAction(ended, "landlord", "claim_damage", { amount: 50n * U }).ok, false);
     assert.equal(checkAction(ended, "landlord", "claim_damage", { amount: 50n * U, evidence: "x" }).ok, true);
 
-    const claim: Claim = { amount: 80n * U, bond: 20n * U, evidence: Buffer.alloc(32), filed_at: BigInt(T0 + 200), offer: 30n * U };
+    const claim: Claim = { amount: 80n * U, bond: 20n * U, evidence: Buffer.alloc(32), filed_at: BigInt(T0 + 200), offer: 30n * U, answered_at: BigInt(T0 + 250) };
     const disputed = snap(lease("Disputed"), T0 + 300, { claim });
     assert.equal(checkAction(disputed, "arbiter", "resolve", { to_landlord: 81n * U }).ok, false);
     assert.equal(checkAction(disputed, "arbiter", "resolve", { to_landlord: 40n * U }).ok, true);
     assert.equal(checkAction(disputed, "tenant", "resolve", { to_landlord: 40n * U }).ok, false);
   });
 
+  it("settles halfway when the arbiter stays silent past the deadline", () => {
+    const claim: Claim = { amount: 80n * U, bond: 20n * U, evidence: Buffer.alloc(32), filed_at: BigInt(T0 + 200), offer: 30n * U, answered_at: BigInt(T0 + 250) };
+    const l = lease("Disputed");
+    assert.deepEqual(coordinatorDuties(snap(l, T0 + 370, { claim })), []);
+    const duties = coordinatorDuties(snap(l, T0 + 371, { claim }));
+    assert.deepEqual(duties.map((a) => a.fn), ["expire_dispute"]);
+    assert.match(duties[0].label, /55.00 USDC/);
+  });
+
   it("executes a claim when the tenant stays silent", () => {
-    const claim: Claim = { amount: 80n * U, bond: 20n * U, evidence: Buffer.alloc(32), filed_at: BigInt(T0 + 200), offer: undefined };
+    const claim: Claim = { amount: 80n * U, bond: 20n * U, evidence: Buffer.alloc(32), filed_at: BigInt(T0 + 200), offer: undefined, answered_at: 0n };
     const l = lease("Claimed");
     assert.ok(fns(snap(l, T0 + 260, { claim }), "tenant").includes("respond"));
     assert.deepEqual(coordinatorDuties(snap(l, T0 + 261, { claim })).map((a) => a.fn), ["execute_claim"]);
@@ -157,6 +179,7 @@ describe("rule engine", () => {
 
   it("lets each party rate the other once, after the lease", () => {
     assert.ok(!fns(snap(lease("Active"), T0 + 10, { v2: true }), "tenant").includes("rate"));
+    assert.ok(!fns(snap(lease("Ended"), T0 + 10, { v2: true, ratings: {} }), "tenant").includes("rate"));
     const ended = lease("Closed");
     assert.ok(fns(snap(ended, T0 + 10, { v2: true, ratings: {} }), "tenant").includes("rate"));
     const s = snap(ended, T0 + 10, { v2: true, ratings: { by_tenant: 5 } });

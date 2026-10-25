@@ -53,6 +53,7 @@ async function main() {
     move_in_window: 600n,
     claim_window: 60n,
     response_window: 60n,
+    arbitration_window: 120n,
     arbiter: deployment.accounts.arbiter,
     yield_offered: true,
     buffer_bps: 500,

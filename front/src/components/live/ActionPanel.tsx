@@ -17,11 +17,12 @@ import {
   Sprout,
   Star,
   ThumbsUp,
+  Timer,
   Undo2,
   XCircle,
   type LucideIcon,
 } from 'lucide-react'
-import { actionsFor, bufferToLock, type Action, type ContractFn } from '@agents/rules'
+import { actionsFor, bufferToLock, damageClaimable, type Action, type ContractFn } from '@agents/rules'
 import { checkAction } from '@agents/guards'
 import { explainRule, type RuleId } from '@agents/explain'
 import { Button } from '../ui/Button'
@@ -45,6 +46,7 @@ const ICON: Record<ContractFn, LucideIcon> = {
   accept_counter: BadgeCheck,
   execute_claim: Gavel,
   resolve: Scale,
+  expire_dispute: Timer,
   release: ShieldCheck,
   exit_blend: ArrowDownToLine,
   propose_yield: Sprout,
@@ -66,6 +68,7 @@ const RULE: Partial<Record<ContractFn, RuleId>> = {
   accept_counter: 'arbitration',
   execute_claim: 'tenant_response',
   resolve: 'arbitration',
+  expire_dispute: 'arbitration',
   release: 'end_of_lease',
   exit_blend: 'yield_exit',
   propose_yield: 'invest_during_lease',
@@ -129,7 +132,7 @@ export function ActionPanel({ view, compact }: { view: LeaseView; compact?: bool
 /** One contract call: inputs, the rule it follows, the guard check, then signature. */
 export function ActionDialog({ view, action, onClose }: { view: LeaseView; action: Action; onClose: () => void }) {
   const live = useLive()
-  const { lease, claim, guaranteeValue } = view.snap
+  const { lease, claim } = view.snap
   const t = lease.terms
   const me = live.wallet.address
   const [notes, setNotes] = useState('')
@@ -290,7 +293,7 @@ export function ActionDialog({ view, action, onClose }: { view: LeaseView; actio
           <Field
             label={
               action.fn === 'claim_damage'
-                ? `Amount claimed (max ${usdc(guaranteeValue)})`
+                ? `Amount claimed (max ${usdc(damageClaimable(view.snap))})`
                 : action.fn === 'respond'
                   ? `Your offer (claim: ${usdc(claim!.amount)})`
                   : `To the landlord (out of ${usdc(claim!.amount)})`
@@ -376,13 +379,32 @@ function factsFor(action: Action, view: LeaseView): { label: ReactNode; value: R
       ]
     }
     case 'pay_rent':
-    case 'claim_unpaid':
       return [
         { label: 'Month', value: `${lease.months_settled + 1} of ${t.months}` },
         { label: 'Amount', value: usdc(t.rent) },
       ]
-    case 'release':
-      return [{ label: 'Back to the tenant', value: usdc(guaranteeValue) }]
+    case 'claim_unpaid':
+      return [
+        { label: 'Month', value: `${lease.months_settled + 1} of ${t.months}` },
+        { label: 'To the landlord, from the guarantee', value: usdc(t.rent) },
+      ]
+    case 'release': {
+      const left = damageClaimable(view.snap)
+      const owed = guaranteeValue - left
+      return [
+        ...(owed > 0n ? [{ label: 'Unpaid months, to the landlord', value: usdc(owed) }] : []),
+        { label: 'Back to the tenant', value: usdc(left) },
+      ]
+    }
+    case 'expire_dispute':
+      return claim
+        ? [
+            { label: 'Claimed', value: usdc(claim.amount) },
+            { label: 'Tenant offer', value: usdc(claim.offer ?? 0n) },
+            { label: 'To the landlord (halfway)', value: usdc((claim.amount + (claim.offer ?? 0n)) / 2n) },
+            { label: 'Dispute bond', value: 'Back to the landlord' },
+          ]
+        : []
     case 'refund_no_keys':
       return [{ label: 'Back to the tenant', value: usdc(lease.rent_escrow + guaranteeValue) }]
     case 'execute_claim':

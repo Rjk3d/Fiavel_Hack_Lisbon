@@ -277,6 +277,7 @@ function LeaseDetailBody({ view }: { view: LeaseView }) {
               { label: 'Guarantee', value: usdc(t.deposit) },
               { label: 'Grace period', value: duration(t.grace) },
               { label: 'Claim window / response', value: `${duration(t.claim_window)} / ${duration(t.response_window)}` },
+              { label: 'Arbiter decides within', value: `${duration(t.arbitration_window)}, then halfway by default` },
               { label: 'Yield option', value: t.yield_offered ? (l.yield_active ? 'Active on Blend' : 'Offered') : 'Not offered' },
             ]}
           />

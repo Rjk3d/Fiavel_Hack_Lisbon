@@ -3,7 +3,7 @@
 // bounds the contract enforces. The user's signature and the contract are
 // the second and third locks.
 
-import { analyze, type ContractFn, type Role, type Snapshot } from "./rules.js";
+import { analyze, damageClaimable, type ContractFn, type Role, type Snapshot } from "./rules.js";
 
 export type GuardResult = { ok: true } | { ok: false; reason: string };
 
@@ -32,7 +32,9 @@ export function checkAction(
     case "claim_damage": {
       const a = amount("amount");
       if (a === undefined || a <= 0n) return { ok: false, reason: "A claim needs a positive amount." };
-      if (a > s.guaranteeValue) return { ok: false, reason: "A claim cannot exceed the guarantee." };
+      if (a > damageClaimable(s)) {
+        return { ok: false, reason: "A claim cannot exceed the guarantee left once unpaid months are paid to the landlord." };
+      }
       if (!args.evidence) return { ok: false, reason: "A claim needs the hash of its evidence." };
       break;
     }

@@ -61,6 +61,9 @@ pub struct Terms {
     pub claim_window: u64,
     /// Time the tenant has to answer a damage claim.
     pub response_window: u64,
+    /// Time the arbiter has to decide once the tenant countered. Past it,
+    /// anyone can settle the dispute halfway between the claim and the offer.
+    pub arbitration_window: u64,
     pub arbiter: Address,
     /// Landlord offers to place the guarantee on Blend.
     pub yield_offered: bool,
@@ -100,6 +103,8 @@ pub struct Claim {
     pub bond: i128,
     /// Tenant counter-offer, once answered.
     pub offer: Option<i128>,
+    /// When the tenant countered (0 before): opens the arbitration window.
+    pub answered_at: u64,
 }
 
 #[contracttype]
@@ -116,7 +121,7 @@ pub struct Lease {
     /// Months paid by the tenant or taken from the guarantee. Month 0 is the
     /// first rent, locked at funding.
     pub months_settled: u32,
-    /// Months the landlord took from the guarantee.
+    /// Months taken from the guarantee for the landlord.
     pub months_unpaid: u32,
     /// First month of rent, released at move-in.
     pub rent_escrow: i128,

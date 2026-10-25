@@ -47,12 +47,14 @@ Track: **Genesis + Stellar Composed**.
  Tenant (Ana)        Landlord (Manuel)        Arbiter
  smart account       smart account            (named in the lease)
       │  fund, pay_rent,     │  create_lease,          │ resolve
-      │  respond, end_lease  │  claim_unpaid, claim_damage
+      │  respond, end_lease  │  claim_damage,          │
+      │                      │  accept_counter         │
       ▼                      ▼                         ▼
  ┌──────────────────────────────────────────────────────────────┐
  │ LeaseVault (Soroban)                                         │
  │  lease state · deadlines · bounded arbitration · bonds       │
- │  public calls: release, execute_claim, refund_no_keys,       │
+ │  public calls: claim_unpaid, release, execute_claim,         │
+ │                expire_dispute, refund_no_keys,               │
  │                exit_blend (only when the position is at risk)│
  └───────┬───────────────────────────────┬──────────────────────┘
          │ USDC (SAC)                    │ submit supply / withdraw
@@ -65,12 +67,12 @@ Track: **Genesis + Stellar Composed**.
 
 | Component | Role | Testnet ID |
 |---|---|---|
-| LeaseVault (Soroban, built during the hack) | Holds the first rent and the guarantee, enforces every lease rule | [`CDR2QYELO3W3BEPTAJVTZQEB7IFB6PIYH5DVITIGN6SYTVYVYKXGBRXP`](https://stellar.expert/explorer/testnet/contract/CDR2QYELO3W3BEPTAJVTZQEB7IFB6PIYH5DVITIGN6SYTVYVYKXGBRXP) (v2) |
+| LeaseVault (Soroban, built during the hack) | Holds the first rent and the guarantee, enforces every lease rule | [`CCSWLUOQ6ZXKF5BQOSUPTNGJODWMRVPFEVKGNWNVRGG2U2LNGQJSEJAZ`](https://stellar.expert/explorer/testnet/contract/CCSWLUOQ6ZXKF5BQOSUPTNGJODWMRVPFEVKGNWNVRGG2U2LNGQJSEJAZ) (v3) |
 | USDC (SAC) | Rent and guarantee asset. On testnet this is Blend's test USDC (`USDC:GATALT…F5V56`), the asset its pool lends | [`CAQCFVLOBK5GIULPNZRGATJJMIZL5BSP7X5YJVMGCPTUEPFM4AVSRCJU`](https://stellar.expert/explorer/testnet/contract/CAQCFVLOBK5GIULPNZRGATJJMIZL5BSP7X5YJVMGCPTUEPFM4AVSRCJU) |
 | Blend v2 pool | Opt-in yield, accepted by both parties. Guarantee minus one month is supplied; one month and a 5 % tenant buffer stay liquid | [`CCEBVDYM32YNYCVNRXQKDFFPISJJCV557CDZEIRBEE4NCV4KHPQ44HGF`](https://stellar.expert/explorer/testnet/contract/CCEBVDYM32YNYCVNRXQKDFFPISJJCV557CDZEIRBEE4NCV4KHPQ44HGF) |
 | Lease Coordinator wallet (Stellar CLI) | Calls the public deadline functions; pays fees only, holds no user funds | see [`deployments/testnet.json`](deployments/testnet.json) |
 | OpenZeppelin smart accounts (passkeys) | Face ID wallets for tenant and landlord | _front, next step_ |
-| OpenZeppelin policy | Limits the landlord's agent to `claim_unpaid` | _front, next step_ |
+| OpenZeppelin policy | Limits what an agent may sign on a smart account | _next step_ (no longer needed for unpaid rent: `claim_unpaid` is public) |
 
 ### LeaseVault rules
 
@@ -80,19 +82,20 @@ Track: **Genesis + Stellar Composed**.
 | `fund` | tenant | before the move-in deadline | locks first rent + guarantee (+ 5 % buffer with yield); supplies guarantee − 1 month to Blend if both parties opted in |
 | `confirm_move_in` | both | same inventory hash, before the deadline | releases the first rent, starts the lease |
 | `refund_no_keys` | anyone | deadline passed without move-in | everything back to the tenant |
-| `pay_rent` | tenant | months left | rent straight to the landlord |
-| `claim_unpaid` | landlord | due date + grace passed | one month from the guarantee: liquid part first, then Blend |
+| `pay_rent` | tenant | months left, during the lease or late after it ended | rent straight to the landlord |
+| `claim_unpaid` | anyone (the coordinator) | due date + grace passed | one month from the guarantee to the landlord, the only possible recipient: liquid part first, then Blend |
 | `end_lease` | either party | lease term reached | records the exit hash, opens the claim window |
-| `claim_damage` | landlord | inside the claim window, ≤ guarantee, posts a bond | undisputed part refunded to the tenant at once |
+| `claim_damage` | landlord | inside the claim window, ≤ guarantee left after unpaid months, posts a bond | unpaid months paid to the landlord first, undisputed part refunded to the tenant at once |
 | `respond` / `accept_counter` | tenant / landlord | inside the response window | settle at the claim or at the counter-offer |
 | `execute_claim` | anyone | tenant silent | claim paid |
 | `resolve` | arbiter | dispute open | splits the disputed amount between the two parties only; bond forfeited if the landlord gets < 50 % |
-| `release` | anyone | claim window passed, no claim | guarantee + tenant's yield share to the tenant |
+| `expire_dispute` | anyone | arbiter silent past the arbitration window | settles halfway between the claim and the offer, bond back to the landlord: a guarantee can never stay locked |
+| `release` | anyone | claim window passed, no claim | months still unpaid to the landlord, then the rest + the tenant's yield share to the tenant |
 | `exit_blend` | parties anytime; anyone if at risk | loss > 0.1 % or pool utilization ≥ 95 % | brings the position back; gain shared 70 / 20 / 10 |
 | `propose_yield` | tenant or landlord | lease active, nothing invested, keeps ≥ 1 month liquid | records how much stays in the contract and the yield split; the tenant's buffer is locked if the tenant proposes, and never a second time if it is already in the contract |
 | `approve_yield` | the other party | a proposal is pending | second approval lends `liquid − keep` on Blend; nothing moves before both approved |
 | `cancel_yield` | tenant or landlord | a proposal is pending | drops it and refunds a locked buffer (also done automatically by `end_lease`) |
-| `rate` | tenant or landlord | lease over (ended, claimed, disputed or closed), once per party | scores the other party 1–5, recorded on the lease. It counts towards public reputation (`get_reputation`: score, leases, distinct counterparties, time rented) only if the lease met the minimum length and guarantee set at deploy (testnet: 180 s and 100 USDC) |
+| `rate` | tenant or landlord | lease closed (no claim left open), once per party | scores the other party 1–5, recorded on the lease. It counts towards public reputation (`get_reputation`: score, leases, distinct counterparties, time rented) only if the lease met the minimum length and guarantee set at deploy (testnet: 180 s and 100 USDC) |
 
 Durations are lease parameters, so the demo runs with 1 month = 60 seconds.
 
@@ -102,7 +105,8 @@ Prerequisites: Rust with the `wasm32v1-none` target, Stellar CLI, Node 20+.
 On Windows, Visual Studio Build Tools with the "Desktop development with C++" workload is required.
 
 ```bash
-# Contract: 30 unit tests (lease lifecycle, disputes, Blend yield and loss, mid-lease investment, ratings)
+# Contract: 37 unit tests (lease lifecycle, unpaid rent, disputes and arbiter timeout, Blend yield and loss,
+# mid-lease investment, ratings)
 cargo test -p lease_vault          # Windows: scripts\cargo.cmd test -p lease_vault
 stellar contract build --package lease_vault
 
@@ -163,6 +167,14 @@ npm run coordinator          # the Lease Coordinator loop (every 10 s)
 The agents are deterministic: `src/rules.ts` mirrors every condition of the contract, `src/explain.ts` has one template per rule filled with on-chain values, `src/guards.ts` refuses any call outside the rules before a transaction is even built. In the refusal scene, the guard refuses "seize the whole guarantee now", then a forced call is rejected by the contract (`WrongStatus`).
 
 ## On-chain evidence (testnet)
+
+LeaseVault v3 (`CCSWLUOQ…SEJAZ`), two leases played in the web app:
+
+| Step | Transaction |
+|---|---|
+| Lease #0: an unpaid month paid to the landlord, triggered from the arbiter's wallet (no landlord signature) | [b3b318a9…](https://stellar.expert/explorer/testnet/tx/b3b318a9d96eb4ec8dbc8ff0aa7d336268e823f40822f800f40a9a2207885da8) |
+| Lease #0: release with the last month unpaid: 100 USDC to the landlord first, the rest to the tenant | [4ba60edd…](https://stellar.expert/explorer/testnet/tx/4ba60edd07891696a5ae0dc0fca7c1c116b8c259b5520511c316c1ec381c2895) |
+| Lease #1: claim of 150, offer of 75, arbiter silent for 2 min: the tenant settles halfway (112.50 / 37.50) | [053063f6…](https://stellar.expert/explorer/testnet/tx/053063f62d895a0b0e1a3e62bce00ba6109b9be3dcb8756bad7888f940540e36) |
 
 LeaseVault v2 (`CDR2QYEL…GBRXP`), lease #0 played in the web app, then lease #1 for a rating below the thresholds:
 

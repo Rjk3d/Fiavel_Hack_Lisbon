@@ -57,15 +57,17 @@ export function explainRule(rule: RuleId, { lease, disputeBond }: Context): stri
       );
     case "unpaid_rent":
       return (
-        `If a month is not paid ${duration(t.grace)} after its due date, the landlord can take exactly ` +
-        `one month (${usdc(t.rent)}) from the guarantee. One month always stays in the contract, ` +
+        `If a month is not paid ${duration(t.grace)} after its due date, exactly one month (${usdc(t.rent)}) ` +
+        `is paid to the landlord from the guarantee. Anyone can trigger it, the coordinator does it automatically, ` +
+        `and the money can only go to the landlord. One month always stays in the contract, ` +
         `so this works instantly even when part of the guarantee is lent on Blend.`
       );
     case "end_of_lease":
       return (
         `After ${t.months} months, either party ends the lease and can record the exit inventory. ` +
         `The landlord then has ${duration(t.claim_window)} to claim damage. ` +
-        `With no claim, anyone can release the whole guarantee to the tenant.`
+        `Months still unpaid are paid to the landlord first (the tenant can still pay them late). ` +
+        `With no claim, anyone can then release the rest of the guarantee to the tenant.`
       );
     case "damage_claim":
       return (
@@ -81,7 +83,9 @@ export function explainRule(rule: RuleId, { lease, disputeBond }: Context): stri
       return (
         `If the tenant counters, the landlord can accept the offer, or the arbiter named in the lease decides. ` +
         `The arbiter can only split the disputed amount between the two parties: ` +
-        `the contract refuses any other destination or a larger amount.`
+        `the contract refuses any other destination or a larger amount. ` +
+        `If the arbiter does not decide within ${duration(t.arbitration_window)}, anyone can settle halfway ` +
+        `between the claim and the offer, so the guarantee can never stay locked.`
       );
     case "dispute_bond":
       return (
@@ -95,7 +99,7 @@ export function explainRule(rule: RuleId, { lease, disputeBond }: Context): stri
       );
     case "early_seizure":
       return (
-        `Nobody can take the guarantee during the lease. The landlord can take an unpaid month after the grace ` +
+        `Nobody can take the guarantee during the lease. An unpaid month goes to the landlord after the grace ` +
         `period, and claim damage only after the lease ends. Any other attempt is rejected by the contract.`
       );
     case "yield":
@@ -120,7 +124,7 @@ export function explainRule(rule: RuleId, { lease, disputeBond }: Context): stri
       );
     case "rating":
       return (
-        `Once the lease is over, the tenant and the landlord each rate the other from 1 to 5, once. ` +
+        `Once the lease is settled (no claim left open), the tenant and the landlord each rate the other from 1 to 5, once. ` +
         `A score always shows on the lease, but it only counts towards reputation if the lease met the minimum length ` +
         `and guarantee set for this deployment. Reputation also shows how many different parties gave the scores, ` +
         `so five stars from the same friend stand out.`

@@ -57,7 +57,7 @@ hash in `src/lib/auth.ts`; rotate it with `node scripts/hash-password.mjs "<pass
 
 ## Ratings and investing during the lease (LeaseVault v2)
 
-Both need the v2 contract (`rate`, `propose_yield`, `approve_yield`, `cancel_yield`). On an older deployment the
+Both need LeaseVault v2 or later (`rate`, `propose_yield`, `approve_yield`, `cancel_yield`). On an older deployment the
 reads fail, the snapshot says `v2: false`, and the app hides these actions instead of inventing data.
 Redeploy with `scripts/deploy-testnet.sh` after `stellar contract build`, then regenerate the client
 (`stellar contract bindings typescript --wasm target/wasm32v1-none/release/lease_vault.wasm --output-dir packages/lease-vault-client --overwrite`).

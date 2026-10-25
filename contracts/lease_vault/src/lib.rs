@@ -369,11 +369,14 @@ impl LeaseVault {
         LeaseRefunded { id, amount }.publish(&env);
     }
 
-    /// Tenant pays the next month directly to the landlord.
+    /// Tenant pays the next month directly to the landlord, during the lease
+    /// or late, until the guarantee is settled.
     pub fn pay_rent(env: Env, id: u64) {
         let cfg = config(&env);
         let mut lease = load(&env, id);
-        require_status(&env, &lease, Status::Active);
+        if lease.status != Status::Active && lease.status != Status::Ended {
+            panic_with_error!(&env, Error::WrongStatus);
+        }
         let tenant = tenant_of(&lease);
         tenant.require_auth();
         if lease.months_settled >= lease.terms.months {
@@ -391,15 +394,15 @@ impl LeaseVault {
         .publish(&env);
     }
 
-    /// Landlord takes an unpaid month from the guarantee once the grace
-    /// period has passed: liquid month first, then Blend.
+    /// Pays an unpaid month to the landlord from the guarantee once the grace
+    /// period has passed: liquid month first, then Blend. Callable by anyone,
+    /// since the money can only go to the landlord.
     pub fn claim_unpaid(env: Env, id: u64) {
         let cfg = config(&env);
         let mut lease = load(&env, id);
         if lease.status != Status::Active && lease.status != Status::Ended {
             panic_with_error!(&env, Error::WrongStatus);
         }
-        lease.landlord.require_auth();
         let month = lease.months_settled;
         if month >= lease.terms.months {
             panic_with_error!(&env, Error::NothingDue);
@@ -444,8 +447,8 @@ impl LeaseVault {
     }
 
     /// Landlord claims `amount` for damage, with the hash of the evidence,
-    /// and posts the dispute bond. The undisputed part of the guarantee goes
-    /// back to the tenant immediately.
+    /// and posts the dispute bond. Months still unpaid are paid to the
+    /// landlord first; the undisputed rest goes back to the tenant immediately.
     pub fn claim_damage(env: Env, id: u64, amount: i128, evidence: BytesN<32>) {
         let cfg = config(&env);
         let mut lease = load(&env, id);
@@ -455,6 +458,7 @@ impl LeaseVault {
             panic_with_error!(&env, Error::DeadlinePassed);
         }
         exit_blend_all(&env, &cfg, id, &mut lease);
+        settle_unpaid(&env, &cfg, id, &mut lease);
         if amount <= 0 || amount > lease.liquid {
             panic_with_error!(&env, Error::InvalidAmount);
         }
@@ -474,6 +478,7 @@ impl LeaseVault {
             filed_at: now(&env),
             bond: cfg.dispute_bond,
             offer: None,
+            answered_at: 0,
         });
         lease.status = Status::Claimed;
         save(&env, id, &lease);
@@ -505,6 +510,7 @@ impl LeaseVault {
             settle(&env, &cfg, id, &mut lease, claim.amount, false);
         } else {
             claim.offer = Some(offer);
+            claim.answered_at = now(&env);
             save_claim(&env, id, &claim);
             lease.status = Status::Disputed;
         }
@@ -553,8 +559,25 @@ impl LeaseVault {
         save(&env, id, &lease);
     }
 
-    /// No damage claim within the window: the whole guarantee, and the
-    /// tenant's share of the yield, goes back to the tenant. Callable by anyone.
+    /// The arbiter did not decide within the arbitration window: the dispute
+    /// is settled halfway between the claim and the tenant's offer, and the
+    /// bond goes back to the landlord. Callable by anyone.
+    pub fn expire_dispute(env: Env, id: u64) {
+        let cfg = config(&env);
+        let mut lease = load(&env, id);
+        require_status(&env, &lease, Status::Disputed);
+        let claim = load_claim(&env, id);
+        if now(&env) <= claim.answered_at + lease.terms.arbitration_window {
+            panic_with_error!(&env, Error::TooEarly);
+        }
+        let to_landlord = (claim.amount + claim.offer.unwrap_or(0)) / 2;
+        settle(&env, &cfg, id, &mut lease, to_landlord, false);
+        save(&env, id, &lease);
+    }
+
+    /// No damage claim within the window: months still unpaid go to the
+    /// landlord, then the rest of the guarantee and the tenant's share of the
+    /// yield go back to the tenant. Callable by anyone.
     pub fn release(env: Env, id: u64) {
         let cfg = config(&env);
         let mut lease = load(&env, id);
@@ -563,6 +586,7 @@ impl LeaseVault {
             panic_with_error!(&env, Error::TooEarly);
         }
         exit_blend_all(&env, &cfg, id, &mut lease);
+        let to_landlord = settle_unpaid(&env, &cfg, id, &mut lease);
         let to_tenant = lease.liquid;
         pay(&env, &cfg, &tenant_of(&lease), to_tenant);
         lease.liquid = 0;
@@ -570,7 +594,7 @@ impl LeaseVault {
         save(&env, id, &lease);
         LeaseSettled {
             id,
-            to_landlord: 0,
+            to_landlord,
             to_tenant,
         }
         .publish(&env);
@@ -705,19 +729,17 @@ impl LeaseVault {
 
     // ── Ratings ─────────────────────────────────────────────────────────
 
-    /// Once the lease is over, each party rates the other from 1 to 5, once.
-    /// Only the two parties of a real lease can rate, so scores cannot be
-    /// bought without signing and funding a lease.
+    /// Once the lease is settled, each party rates the other from 1 to 5,
+    /// once. Only the two parties of a real lease can rate, so scores cannot
+    /// be bought without signing and funding a lease, and nobody can rate
+    /// while a claim is still open.
     pub fn rate(env: Env, id: u64, who: Address, score: u32) {
         who.require_auth();
         if !(1..=5).contains(&score) {
             panic_with_error!(&env, Error::InvalidScore);
         }
         let lease = load(&env, id);
-        match lease.status {
-            Status::Ended | Status::Claimed | Status::Disputed | Status::Closed => {}
-            _ => panic_with_error!(&env, Error::WrongStatus),
-        }
+        require_status(&env, &lease, Status::Closed);
         require_party(&env, &lease, &who);
         let mut ratings = Self::get_ratings(env.clone(), id);
         let ratee = if who == lease.landlord {
@@ -1065,6 +1087,31 @@ fn exit_blend_all(env: &Env, cfg: &Config, id: u64, lease: &mut Lease) {
         lease.liquid -= landlord_cut + fund_cut;
     }
     BlendExited { id, realized, gain }.publish(env);
+}
+
+/// The lease is over and the tenant can no longer pay: every month still
+/// unpaid is paid to the landlord from the guarantee, before anything goes
+/// back to the tenant. Returns the total paid.
+fn settle_unpaid(env: &Env, cfg: &Config, id: u64, lease: &mut Lease) -> i128 {
+    let mut total = 0;
+    while lease.months_settled < lease.terms.months {
+        let rent = lease.terms.rent;
+        let paid = take(env, cfg, id, lease, rent);
+        if paid == 0 {
+            break;
+        }
+        pay(env, cfg, &lease.landlord, paid);
+        UnpaidClaimed {
+            id,
+            month: lease.months_settled,
+            amount: paid,
+        }
+        .publish(env);
+        lease.months_settled += 1;
+        lease.months_unpaid += 1;
+        total += paid;
+    }
+    total
 }
 
 /// Takes up to `amount` from the guarantee, pulling from Blend only what the

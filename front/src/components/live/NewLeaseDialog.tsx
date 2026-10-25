@@ -10,8 +10,8 @@ import { cx } from '../../lib/cx'
 
 /** Durations in seconds. Demo mode compresses a month into a minute so a full lease plays out live. */
 const MODES = {
-  demo: { label: 'Demo · 1 month = 1 minute', period: 60n, grace: 10n, move_in_window: 900n, claim_window: 60n, response_window: 60n },
-  real: { label: 'Real · 30-day months', period: 30n * 86400n, grace: 5n * 86400n, move_in_window: 14n * 86400n, claim_window: 14n * 86400n, response_window: 7n * 86400n },
+  demo: { label: 'Demo · 1 month = 1 minute', period: 60n, grace: 10n, move_in_window: 900n, claim_window: 60n, response_window: 60n, arbitration_window: 120n },
+  real: { label: 'Real · 30-day months', period: 30n * 86400n, grace: 5n * 86400n, move_in_window: 14n * 86400n, claim_window: 14n * 86400n, response_window: 7n * 86400n, arbitration_window: 21n * 86400n },
 }
 
 export function NewLeaseDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
@@ -40,6 +40,7 @@ export function NewLeaseDialog({ open, onClose }: { open: boolean; onClose: () =
         move_in_window: m.move_in_window,
         claim_window: m.claim_window,
         response_window: m.response_window,
+        arbitration_window: m.arbitration_window,
         arbiter: arbiter.trim(),
         yield_offered: yieldOffered,
         buffer_bps: 500,

@@ -20,6 +20,7 @@ export type ContractFn =
   | "accept_counter"
   | "execute_claim"
   | "resolve"
+  | "expire_dispute"
   | "release"
   | "exit_blend"
   | "propose_yield"
@@ -143,6 +144,16 @@ export function timeline(lease: Lease) {
     endAt: start + t.months * period,
     claimWindowEnd: n(lease.ended_at) + n(t.claim_window),
   };
+}
+
+/**
+ * Largest damage claim the contract accepts after the lease: what is left of the
+ * guarantee once the months still unpaid are paid to the landlord.
+ */
+export function damageClaimable(s: Snapshot): bigint {
+  const t = s.lease.terms;
+  const owed = BigInt(t.months - s.lease.months_settled) * t.rent;
+  return s.guaranteeValue > owed ? s.guaranteeValue - owed : 0n;
 }
 
 /**
@@ -275,10 +286,11 @@ export function analyze(s: Snapshot): Insight {
         out.deadlines.push({ label: "Landlord can take it from the guarantee", at: tl.unpaidClaimableAt });
         act({ fn: "pay_rent", role: "tenant", label: `Pay month ${settled + 1} (${usdc(t.rent)})` });
         if (now >= tl.unpaidClaimableAt) {
+          // Public: the money can only go to the landlord, so the coordinator runs it too.
           act({
             fn: "claim_unpaid",
-            role: "landlord",
-            label: `Take month ${settled + 1} (${usdc(t.rent)}) from the guarantee`,
+            role: "anyone",
+            label: `Pay month ${settled + 1} (${usdc(t.rent)}) to the landlord from the guarantee`,
           });
         } else {
           block({
@@ -310,7 +322,7 @@ export function analyze(s: Snapshot): Insight {
         label: "Claim the guarantee",
         reason:
           "The guarantee cannot be claimed during the lease. Damage can only be claimed after the lease ends, " +
-          "within the claim window, and only for a stated amount; unpaid rent is taken month by month.",
+          "within the claim window, and only for a stated amount; unpaid rent is paid month by month.",
       });
       break;
     }
@@ -318,15 +330,30 @@ export function analyze(s: Snapshot): Insight {
     case "claim_window": {
       out.headline = `Lease ended. The landlord can file a damage claim until the window closes.`;
       out.deadlines.push({ label: "Damage-claim window closes", at: tl.claimWindowEnd });
-      if (lease.months_settled < t.months && tl.unpaidClaimableAt !== undefined && now >= tl.unpaidClaimableAt) {
-        act({ fn: "claim_unpaid", role: "landlord", label: `Take unpaid month ${lease.months_settled + 1} from the guarantee` });
+      const unpaid = t.months - lease.months_settled;
+      const owed = BigInt(unpaid) * t.rent;
+      const claimable = damageClaimable(s);
+      if (unpaid > 0) {
+        out.facts.push(
+          `${unpaid} month(s) still unpaid (${usdc(owed)}): they go to the landlord from the guarantee before any refund.`,
+        );
+        act({ fn: "pay_rent", role: "tenant", label: `Pay month ${lease.months_settled + 1} late (${usdc(t.rent)})` });
+        if (tl.unpaidClaimableAt !== undefined && now >= tl.unpaidClaimableAt) {
+          act({
+            fn: "claim_unpaid",
+            role: "anyone",
+            label: `Pay unpaid month ${lease.months_settled + 1} to the landlord from the guarantee`,
+          });
+        }
       }
       if (now <= tl.claimWindowEnd) {
-        act({
-          fn: "claim_damage",
-          role: "landlord",
-          label: `Claim damage, up to ${usdc(s.guaranteeValue)}, with evidence and a dispute bond`,
-        });
+        if (claimable > 0n) {
+          act({
+            fn: "claim_damage",
+            role: "landlord",
+            label: `Claim damage, up to ${usdc(claimable)}, with evidence and a dispute bond`,
+          });
+        }
         block({
           fn: "release",
           role: "anyone",
@@ -335,7 +362,14 @@ export function analyze(s: Snapshot): Insight {
           availableAt: tl.claimWindowEnd + 1,
         });
       } else {
-        act({ fn: "release", role: "anyone", label: `Release the guarantee (${usdc(s.guaranteeValue)}) to the tenant` });
+        act({
+          fn: "release",
+          role: "anyone",
+          label:
+            owed > 0n
+              ? `Pay the ${usdc(owed)} unpaid to the landlord, release the rest to the tenant`
+              : `Release the guarantee (${usdc(s.guaranteeValue)}) to the tenant`,
+        });
       }
       break;
     }
@@ -356,9 +390,26 @@ export function analyze(s: Snapshot): Insight {
 
     case "in_dispute": {
       const c = s.claim!;
-      out.headline = `Dispute over ${usdc(c.amount)}: tenant offered ${usdc(c.offer ?? 0n)}.`;
-      act({ fn: "accept_counter", role: "landlord", label: `Accept the counter-offer (${usdc(c.offer ?? 0n)})` });
+      const offer = c.offer ?? 0n;
+      const end = n(c.answered_at) + n(t.arbitration_window);
+      out.headline = `Dispute over ${usdc(c.amount)}: tenant offered ${usdc(offer)}.`;
+      out.deadlines.push({ label: "Arbiter's deadline", at: end });
+      act({ fn: "accept_counter", role: "landlord", label: `Accept the counter-offer (${usdc(offer)})` });
       act({ fn: "resolve", role: "arbiter", label: `Split the ${usdc(c.amount)} between the two parties` });
+      const half = (c.amount + offer) / 2n;
+      if (now > end) {
+        act({ fn: "expire_dispute", role: "anyone", label: `The arbiter did not decide: settle at ${usdc(half)}, halfway` });
+      } else {
+        for (const role of ["tenant", "landlord", "arbiter"] as const) {
+          block({
+            fn: "expire_dispute",
+            role,
+            label: "Settle without the arbiter",
+            reason: `The arbiter decides ${when(end, now)} at the latest; past that, anyone settles halfway (${usdc(half)} to the landlord).`,
+            availableAt: end + 1,
+          });
+        }
+      }
       out.facts.push(
         `If the landlord gets less than half of the claim, the ${usdc(c.bond)} bond goes to the arbitration fund.`,
       );
@@ -374,7 +425,8 @@ export function analyze(s: Snapshot): Insight {
       break;
   }
 
-  if (s.v2 && lease.tenant && ["claim_window", "awaiting_response", "in_dispute", "closed"].includes(phase)) {
+  // Ratings open once every amount is settled, so nobody rates during a claim.
+  if (s.v2 && lease.tenant && phase === "closed") {
     if (s.ratings?.by_tenant == null) act({ fn: "rate", role: "tenant", label: "Rate your landlord (1 to 5)" });
     if (s.ratings?.by_landlord == null) act({ fn: "rate", role: "landlord", label: "Rate your tenant (1 to 5)" });
   }

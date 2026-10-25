@@ -26,6 +26,7 @@ const INTENTS: { re: RegExp; fn: ContractFn; args?: (v: LeaseView) => Record<str
   { re: /end the lease|move out|moving out|finish the lease/, fn: 'end_lease' },
   { re: /stop (the )?yield|exit blend|opt.?out|withdraw from blend/, fn: 'exit_blend' },
   { re: /accept (the )?counter/, fn: 'accept_counter' },
+  { re: /arbiter.*(silent|late|not (answer|decid))|settle (without|halfway)/, fn: 'expire_dispute' },
   { re: /\brate\b|leave a (rating|review)|give .* stars?/, fn: 'rate' },
   { re: /approve (the )?invest/, fn: 'approve_yield' },
   { re: /invest (my|the) (deposit|guarantee)|propose (an )?invest/, fn: 'propose_yield' },
