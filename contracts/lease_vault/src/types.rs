@@ -7,6 +7,12 @@ pub enum DataKey {
     NextId,
     Lease(u64),
     Claim(u64),
+    /// Pending proposal to place the guarantee on Blend during the lease.
+    YieldProposal(u64),
+    /// Scores the two parties gave each other for a lease.
+    Ratings(u64),
+    /// Running reputation of an address, across every lease.
+    Reputation(Address),
 }
 
 /// Set once by the constructor. The pool cannot be changed afterwards:
@@ -117,6 +123,41 @@ pub struct Lease {
     pub exit_hash: Option<BytesN<32>>,
 }
 
+/// Proposal to lend the guarantee on Blend once the lease is running. It
+/// only executes when both parties have approved it. The tenant's buffer is
+/// locked when the tenant approves and refunded if the proposal is dropped.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct YieldProposal {
+    pub proposer: Address,
+    /// Part of the guarantee that stays liquid in the contract (≥ one month).
+    pub keep: i128,
+    pub tenant_share_bps: u32,
+    pub landlord_share_bps: u32,
+    /// Buffer the tenant locks on approval (terms.buffer_bps of the deposit).
+    pub buffer: i128,
+    pub tenant_ok: bool,
+    pub landlord_ok: bool,
+}
+
+/// Scores (1 to 5) the parties gave each other once the lease was over.
+#[contracttype]
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct LeaseRatings {
+    /// Score the tenant gave the landlord.
+    pub by_tenant: Option<u32>,
+    /// Score the landlord gave the tenant.
+    pub by_landlord: Option<u32>,
+}
+
+/// Sum and number of the scores an address received.
+#[contracttype]
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct Reputation {
+    pub count: u32,
+    pub total: u32,
+}
+
 #[contracterror]
 #[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
 #[repr(u32)]
@@ -133,4 +174,6 @@ pub enum Error {
     BlendIsSafe = 10,
     SameParty = 11,
     AlreadyConfirmed = 12,
+    AlreadyRated = 13,
+    InvalidScore = 14,
 }

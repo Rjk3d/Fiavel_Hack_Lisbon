@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
-import { Bell, ExternalLink, Menu, X } from 'lucide-react'
+import { Bell, ExternalLink, LogIn, LogOut, Menu, Wallet as WalletIcon, X } from 'lucide-react'
 import { NAV } from './nav'
 import { Avatar, Logo } from '../ui/misc'
 import { Pill } from '../ui/Pill'
@@ -9,6 +9,8 @@ import { LiveRoleSwitcher, WalletCard, networkLine } from '../live/cards'
 import { explorerAccount } from '../../stellar/config'
 import { cx } from '../../lib/cx'
 import { ErrorBoundary } from '../ui/ErrorBoundary'
+import { useAuth } from '../../state/auth'
+import { ROLES } from '../../stellar/wallets'
 
 export function AppShell() {
   const { pathname } = useLocation()
@@ -118,7 +120,8 @@ function TopBar({ onMenu }: { onMenu: () => void }) {
 }
 
 function ProfileMenu() {
-  const { role, wallet } = useLive()
+  const { role, wallet, fund, funding } = useLive()
+  const auth = useAuth()
   const navigate = useNavigate()
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
@@ -153,8 +156,25 @@ function ProfileMenu() {
           <div className="px-3 pb-3 pt-2">
             <p className="font-semibold">{me.name}</p>
             <p className="text-[13px] text-ink-muted">{me.note}</p>
+            <p className="mt-2">
+              <Pill tone={auth.isTeam ? 'success' : 'neutral'} dot>
+                {auth.isTeam ? `Team · ${auth.session?.user}` : 'Guest session'}
+              </Pill>
+            </p>
           </div>
           <div className="h-px bg-line" />
+          {auth.isTeam && (
+            <MenuItem
+              icon={<WalletIcon size={16} />}
+              disabled={!!funding}
+              onClick={async () => {
+                setOpen(false)
+                for (const r of ROLES) await fund(r)
+              }}
+            >
+              Fund all three test wallets
+            </MenuItem>
+          )}
           <MenuItem
             icon={<ExternalLink size={16} />}
             onClick={() => {
@@ -172,6 +192,16 @@ function ProfileMenu() {
             }}
           >
             Back to website
+          </MenuItem>
+          <MenuItem
+            icon={auth.isTeam ? <LogOut size={16} /> : <LogIn size={16} />}
+            onClick={() => {
+              setOpen(false)
+              auth.signOut()
+              navigate('/welcome')
+            }}
+          >
+            {auth.isTeam ? 'Sign out' : 'Sign in as team'}
           </MenuItem>
         </div>
       )}

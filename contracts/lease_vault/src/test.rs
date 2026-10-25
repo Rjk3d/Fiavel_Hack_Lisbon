@@ -668,3 +668,202 @@ fn two_leases_keep_separate_blend_accounting() {
     assert_eq!(s.bal(&s.pool.address), DEPOSIT - RENT);
     assert_eq!(s.vault.guarantee_value(&b), DEPOSIT + BUFFER);
 }
+
+// ── Invest the guarantee during the lease ───────────────────────────────
+
+#[test]
+fn mid_lease_yield_needs_both_approvals_and_keeps_the_reserve() {
+    let s = setup();
+    let id = s.active_lease(false);
+    let keep = RENT + 100 * U;
+
+    s.vault
+        .propose_yield(&id, &s.landlord, &keep, &7_000, &2_000);
+    // Proposed is not placed: nothing left the contract yet.
+    let lease = s.vault.get_lease(&id);
+    assert!(!lease.yield_active);
+    assert_eq!(lease.shares, 0);
+    assert_eq!(s.bal(&s.vault.address), DEPOSIT);
+    assert_eq!(
+        s.vault.try_approve_yield(&id, &s.landlord),
+        Err(Ok(err(Error::AlreadyConfirmed)))
+    );
+
+    let tenant_before = s.bal(&s.tenant);
+    s.vault.approve_yield(&id, &s.tenant);
+    let lease = s.vault.get_lease(&id);
+    assert!(lease.yield_active);
+    assert_eq!(lease.placed, DEPOSIT - keep);
+    assert_eq!(lease.liquid, keep + BUFFER);
+    assert_eq!(s.bal(&s.tenant), tenant_before - BUFFER);
+    assert_eq!(s.vault.guarantee_value(&id), DEPOSIT + BUFFER);
+    assert_eq!(s.vault.get_yield_proposal(&id), None);
+}
+
+#[test]
+fn mid_lease_yield_is_shared_on_release() {
+    let s = setup();
+    let id = s.active_lease(false);
+    s.vault.propose_yield(&id, &s.tenant, &RENT, &7_000, &2_000);
+    s.vault.approve_yield(&id, &s.landlord);
+    let placed = DEPOSIT - RENT;
+
+    s.vault.pay_rent(&id);
+    s.vault.pay_rent(&id);
+    s.at(T0 + 180);
+    s.vault.end_lease(&id, &s.tenant, &None);
+
+    // +10 % on the placed part.
+    let gain = placed / 10;
+    s.sac.mint(&s.pool.address, &gain);
+    s.pool.set_b_rate(&(RATE_SCALAR * 11 / 10));
+    let tenant_before = s.bal(&s.tenant);
+    let landlord_before = s.bal(&s.landlord);
+    s.at(T0 + 180 + 121);
+    s.vault.release(&id);
+
+    assert_eq!(s.bal(&s.landlord), landlord_before + gain * 20 / 100);
+    assert_eq!(s.bal(&s.fund), gain * 10 / 100);
+    assert_eq!(
+        s.bal(&s.tenant),
+        tenant_before + DEPOSIT + BUFFER + gain * 70 / 100
+    );
+    assert_eq!(s.bal(&s.vault.address), 0);
+}
+
+#[test]
+fn mid_lease_yield_rejects_bad_proposals() {
+    let s = setup();
+    let id = s.active_lease(false);
+    // The reserve must cover at least one month, and something must be placed.
+    assert_eq!(
+        s.vault
+            .try_propose_yield(&id, &s.landlord, &(RENT - 1), &7_000, &2_000),
+        Err(Ok(err(Error::InvalidAmount)))
+    );
+    assert_eq!(
+        s.vault
+            .try_propose_yield(&id, &s.landlord, &DEPOSIT, &7_000, &2_000),
+        Err(Ok(err(Error::InvalidAmount)))
+    );
+    assert_eq!(
+        s.vault
+            .try_propose_yield(&id, &s.landlord, &RENT, &8_000, &3_000),
+        Err(Ok(err(Error::InvalidTerms)))
+    );
+    assert_eq!(
+        s.vault
+            .try_propose_yield(&id, &s.stranger, &RENT, &7_000, &2_000),
+        Err(Ok(err(Error::NotAParty)))
+    );
+    // A lease that already lends its guarantee cannot get a second proposal.
+    let placed = s.active_lease(true);
+    assert_eq!(
+        s.vault
+            .try_propose_yield(&placed, &s.tenant, &RENT, &7_000, &2_000),
+        Err(Ok(err(Error::AlreadyConfirmed)))
+    );
+}
+
+#[test]
+fn cancelling_a_proposal_refunds_the_tenant_buffer() {
+    let s = setup();
+    let id = s.active_lease(false);
+    let tenant_before = s.bal(&s.tenant);
+    s.vault.propose_yield(&id, &s.tenant, &RENT, &7_000, &2_000);
+    assert_eq!(s.bal(&s.tenant), tenant_before - BUFFER);
+
+    s.vault.cancel_yield(&id, &s.landlord);
+    assert_eq!(s.bal(&s.tenant), tenant_before);
+    assert_eq!(s.vault.get_yield_proposal(&id), None);
+    assert_eq!(
+        s.vault.try_cancel_yield(&id, &s.tenant),
+        Err(Ok(err(Error::NothingDue)))
+    );
+}
+
+#[test]
+fn ending_the_lease_drops_a_pending_proposal() {
+    let s = setup();
+    let id = s.active_lease(false);
+    let tenant_before = s.bal(&s.tenant);
+    s.vault.propose_yield(&id, &s.tenant, &RENT, &7_000, &2_000);
+    s.vault.pay_rent(&id);
+    s.vault.pay_rent(&id);
+    s.at(T0 + 180);
+    s.vault.end_lease(&id, &s.landlord, &None);
+    assert_eq!(s.vault.get_yield_proposal(&id), None);
+    assert_eq!(s.bal(&s.tenant), tenant_before - 2 * RENT);
+
+    s.at(T0 + 301);
+    s.vault.release(&id);
+    assert_eq!(s.bal(&s.vault.address), 0);
+}
+
+// ── Ratings ─────────────────────────────────────────────────────────────
+
+#[test]
+fn parties_rate_each_other_once_after_the_lease() {
+    let s = setup();
+    let id = s.ended_lease(false);
+
+    s.vault.rate(&id, &s.tenant, &5);
+    s.vault.rate(&id, &s.landlord, &4);
+    assert_eq!(
+        s.vault.get_ratings(&id),
+        LeaseRatings {
+            by_tenant: Some(5),
+            by_landlord: Some(4)
+        }
+    );
+    assert_eq!(
+        s.vault.get_reputation(&s.landlord),
+        Reputation { count: 1, total: 5 }
+    );
+    assert_eq!(
+        s.vault.get_reputation(&s.tenant),
+        Reputation { count: 1, total: 4 }
+    );
+    assert_eq!(
+        s.vault.try_rate(&id, &s.tenant, &1),
+        Err(Ok(err(Error::AlreadyRated)))
+    );
+
+    // A second lease (same fixture clock) adds to the same reputation.
+    s.at(T0);
+    let id2 = s.ended_lease(false);
+    s.vault.rate(&id2, &s.tenant, &3);
+    assert_eq!(
+        s.vault.get_reputation(&s.landlord),
+        Reputation { count: 2, total: 8 }
+    );
+}
+
+#[test]
+fn ratings_are_limited_to_real_parties_after_the_lease() {
+    let s = setup();
+    let active = s.active_lease(false);
+    assert_eq!(
+        s.vault.try_rate(&active, &s.tenant, &5),
+        Err(Ok(err(Error::WrongStatus)))
+    );
+
+    let id = s.ended_lease(false);
+    assert_eq!(
+        s.vault.try_rate(&id, &s.stranger, &5),
+        Err(Ok(err(Error::NotAParty)))
+    );
+    assert_eq!(
+        s.vault.try_rate(&id, &s.arbiter, &5),
+        Err(Ok(err(Error::NotAParty)))
+    );
+    assert_eq!(
+        s.vault.try_rate(&id, &s.tenant, &0),
+        Err(Ok(err(Error::InvalidScore)))
+    );
+    assert_eq!(
+        s.vault.try_rate(&id, &s.tenant, &6),
+        Err(Ok(err(Error::InvalidScore)))
+    );
+    assert_eq!(s.vault.get_reputation(&s.stranger), Reputation::default());
+}

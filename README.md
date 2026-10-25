@@ -89,6 +89,10 @@ Track: **Genesis + Stellar Composed**.
 | `resolve` | arbiter | dispute open | splits the disputed amount between the two parties only; bond forfeited if the landlord gets < 50 % |
 | `release` | anyone | claim window passed, no claim | guarantee + tenant's yield share to the tenant |
 | `exit_blend` | parties anytime; anyone if at risk | loss > 0.1 % or pool utilization ≥ 95 % | brings the position back; gain shared 70 / 20 / 10 |
+| `propose_yield` | tenant or landlord | lease active, nothing invested, keeps ≥ 1 month liquid | records how much stays in the contract and the yield split; the tenant's buffer is locked if the tenant proposes |
+| `approve_yield` | the other party | a proposal is pending | second approval lends `liquid − keep` on Blend; nothing moves before both approved |
+| `cancel_yield` | tenant or landlord | a proposal is pending | drops it and refunds a locked buffer (also done automatically by `end_lease`) |
+| `rate` | tenant or landlord | lease over (ended, claimed, disputed or closed), once per party | scores the other party 1–5; adds to their public reputation (`get_reputation`) |
 
 Durations are lease parameters, so the demo runs with 1 month = 60 seconds.
 
@@ -98,7 +102,7 @@ Prerequisites: Rust with the `wasm32v1-none` target, Stellar CLI, Node 20+.
 On Windows, Visual Studio Build Tools with the "Desktop development with C++" workload is required.
 
 ```bash
-# Contract: 23 unit tests (lease lifecycle, disputes, Blend yield and loss)
+# Contract: 30 unit tests (lease lifecycle, disputes, Blend yield and loss, mid-lease investment, ratings)
 cargo test -p lease_vault          # Windows: scripts\cargo.cmd test -p lease_vault
 stellar contract build --package lease_vault
 

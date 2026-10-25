@@ -21,7 +21,11 @@ export type ContractFn =
   | "execute_claim"
   | "resolve"
   | "release"
-  | "exit_blend";
+  | "exit_blend"
+  | "propose_yield"
+  | "approve_yield"
+  | "cancel_yield"
+  | "rate";
 
 export type Phase =
   | "awaiting_funding"
@@ -33,10 +37,37 @@ export type Phase =
   | "closed"
   | "refunded";
 
+/** Same shape as the contract's YieldProposal (`get_yield_proposal`). */
+export interface YieldProposal {
+  proposer: string;
+  keep: bigint;
+  tenant_share_bps: number;
+  landlord_share_bps: number;
+  buffer: bigint;
+  tenant_ok: boolean;
+  landlord_ok: boolean;
+}
+
+/** Same shape as the contract's LeaseRatings (`get_ratings`). */
+export interface LeaseRatings {
+  /** Score the tenant gave the landlord. */
+  by_tenant?: number;
+  /** Score the landlord gave the tenant. */
+  by_landlord?: number;
+}
+
 export interface Snapshot {
   id: bigint;
   lease: Lease;
   claim?: Claim;
+  /** Pending proposal to invest the guarantee during the lease. */
+  proposal?: YieldProposal;
+  ratings?: LeaseRatings;
+  /**
+   * The deployed contract has the mid-lease yield and rating functions.
+   * False on a deployment that predates them: those actions are not offered.
+   */
+  v2?: boolean;
   /** Unix seconds. */
   now: number;
   /** Liquid part plus Blend position, from `guarantee_value`. */
@@ -259,6 +290,7 @@ export function analyze(s: Snapshot): Insight {
           availableAt: tl.endAt,
         });
       }
+      if (s.v2) investDuringLease(s, act);
       block({
         fn: "claim_damage",
         role: "landlord",
@@ -329,8 +361,42 @@ export function analyze(s: Snapshot): Insight {
       break;
   }
 
+  if (s.v2 && lease.tenant && ["claim_window", "awaiting_response", "in_dispute", "closed"].includes(phase)) {
+    if (s.ratings?.by_tenant === undefined) act({ fn: "rate", role: "tenant", label: "Rate your landlord (1 to 5)" });
+    if (s.ratings?.by_landlord === undefined) act({ fn: "rate", role: "landlord", label: "Rate your tenant (1 to 5)" });
+  }
+
   out.deadlines.sort((a, b) => a.at - b.at);
   return out;
+}
+
+/**
+ * Investing the guarantee while the lease runs: one party proposes how much stays
+ * liquid (at least one month), the other approves, and only then is the rest lent.
+ * Mirrors propose_yield / approve_yield / cancel_yield in the contract.
+ */
+function investDuringLease(s: Snapshot, act: (a: Action) => void) {
+  const { lease, proposal: p } = s;
+  if (lease.yield_active || lease.shares > 0n) return;
+  if (!p) {
+    if (lease.liquid > lease.terms.rent) {
+      for (const role of ["tenant", "landlord"] as const) {
+        act({ fn: "propose_yield", role, label: "Propose to invest part of the guarantee on Blend" });
+      }
+    }
+    return;
+  }
+  const placed = lease.liquid - p.keep;
+  if (!p.tenant_ok) {
+    const buffer = p.buffer > 0n ? ` and lock the ${usdc(p.buffer)} buffer` : "";
+    act({ fn: "approve_yield", role: "tenant", label: `Approve investing ${usdc(placed)}${buffer}` });
+  }
+  if (!p.landlord_ok) {
+    act({ fn: "approve_yield", role: "landlord", label: `Approve investing ${usdc(placed)} on Blend` });
+  }
+  for (const role of ["tenant", "landlord"] as const) {
+    act({ fn: "cancel_yield", role, label: "Withdraw the investment proposal" });
+  }
 }
 
 /** Actions available to one role, including public ones it may run. */

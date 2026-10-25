@@ -6,17 +6,23 @@ import { JoinPage, LiveLeaseDetailPage, LiveLeases, LiveOverview } from './pages
 import { LiveActivity, LiveDeposit, LivePayments } from './pages/live/MoneyPages'
 import { LiveAssistant } from './pages/live/AssistantPage'
 import { LiveProvider } from './state/live'
+import { AuthProvider, RequireChoice } from './state/auth'
+import { WelcomePage } from './pages/WelcomePage'
 
 export default function App() {
   return (
+    <AuthProvider>
     <Routes>
       <Route path="/" element={<LandingPage />} />
+      <Route path="/welcome" element={<WelcomePage />} />
       <Route
         path="/app"
         element={
-          <LiveProvider>
-            <AppShell />
-          </LiveProvider>
+          <RequireChoice>
+            <LiveProvider>
+              <AppShell />
+            </LiveProvider>
+          </RequireChoice>
         }
       >
         <Route index element={<LiveOverview />} />
@@ -31,5 +37,6 @@ export default function App() {
       </Route>
       <Route path="*" element={<LandingPage />} />
     </Routes>
+    </AuthProvider>
   )
 }

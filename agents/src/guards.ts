@@ -50,6 +50,22 @@ export function checkAction(
       }
       break;
     }
+    case "propose_yield": {
+      const keep = amount("keep");
+      const t = Number(args.tenant_share_bps ?? -1);
+      const l = Number(args.landlord_share_bps ?? -1);
+      if (keep === undefined || keep < s.lease.terms.rent) {
+        return { ok: false, reason: "At least one month of rent must stay in the contract." };
+      }
+      if (keep >= s.lease.liquid) return { ok: false, reason: "Keep less than the whole guarantee, or nothing is invested." };
+      if (t < 0 || l < 0 || t + l > 10_000) return { ok: false, reason: "The yield shares must add up to 100 % or less." };
+      break;
+    }
+    case "rate": {
+      const score = Number(args.score);
+      if (!Number.isInteger(score) || score < 1 || score > 5) return { ok: false, reason: "A rating is a whole number from 1 to 5." };
+      break;
+    }
     case "confirm_move_in": {
       if (!args.entry_hash) return { ok: false, reason: "Move-in needs the hash of the inventory." };
       break;

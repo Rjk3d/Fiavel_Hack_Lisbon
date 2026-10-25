@@ -5,6 +5,7 @@ import { explainRule } from '@agents/explain'
 import { ActionPanel } from '../../components/live/ActionPanel'
 import { MONTH_PILL, months, toActivity, yieldOf } from '../../components/live/lease-view'
 import { NoFunds } from '../../components/live/cards'
+import { InvestCard } from '../../components/live/invest'
 import { ActivityList } from '../../components/dashboard/ActivityList'
 import { EmptyState, FactRows, PageHeader, SectionHeader } from '../../components/ui/misc'
 import { Pill } from '../../components/ui/Pill'
@@ -124,6 +125,7 @@ function GuaranteeDetail({ view }: { view: LeaseView }) {
           )}
         </div>
         <div className="space-y-4">
+          <InvestCard view={view} />
           <ActionPanel view={view} compact />
           <p className="rounded-2xl bg-canvas px-4 py-3 text-[13px] leading-[19px] text-ink-muted">{explainRule('yield_loss', { lease: l, disputeBond: NETWORK.disputeBond })}</p>
         </div>

@@ -19,6 +19,8 @@ export const RULES = [
   "yield",
   "yield_loss",
   "yield_exit",
+  "invest_during_lease",
+  "rating",
 ] as const;
 
 export type RuleId = (typeof RULES)[number];
@@ -109,6 +111,18 @@ export function explainRule(rule: RuleId, { lease, disputeBond }: Context): stri
         `If Blend loses value, the loss is absorbed first by the buffer, then by the tenant's part. ` +
         `The landlord is always paid first: unpaid rent and accepted claims come before the tenant's refund.`
       );
+    case "invest_during_lease":
+      return (
+        `During the lease, either party can propose to lend part of the guarantee on Blend. ` +
+        `The proposal says how much stays in the contract (at least one month, ${usdc(t.rent)}) and how any gain is shared. ` +
+        `Nothing moves until the other party approves. The tenant locks a ${pct(t.buffer_bps)} buffer (${usdc(buffer)}) on approval; ` +
+        `withdrawing the proposal gives it back. Once invested, either party can stop at any time.`
+      );
+    case "rating":
+      return (
+        `Once the lease is over, the tenant and the landlord each rate the other from 1 to 5, once. ` +
+        `Only the two parties of a funded lease can rate, so a reputation cannot be faked without a real rental.`
+      );
     case "yield_exit":
       return (
         `The tenant or the landlord can end the yield option at any time. Anyone, including the coordinator, ` +
@@ -129,6 +143,8 @@ export function ruleFor(topic: string): RuleId | undefined {
     [/answer|respond|counter|reply/, "tenant_response"],
     [/arbit|judge|mediat|dispute/, "arbitration"],
     [/bond/, "dispute_bond"],
+    [/rate|rating|review|reputation|star|score/, "rating"],
+    [/propose|approve|invest|reserve|keep/, "invest_during_lease"],
     [/lose|loss|hack|risk/, "yield_loss"],
     [/stop|exit|withdraw|opt.?out/, "yield_exit"],
     [/yield|interest|blend|inflation|earn/, "yield"],

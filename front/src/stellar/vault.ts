@@ -42,7 +42,40 @@ export async function snapshotOf(id: bigint, lease?: Lease): Promise<Snapshot> {
     reader.guarantee_value({ id }).then((t) => t.result),
     reader.blend_at_risk({ id }).then((t) => t.result),
   ])
-  return { id, lease: l, claim, now: Math.floor(Date.now() / 1000), guaranteeValue: value, blendAtRisk: risk }
+  return { id, lease: l, claim, now: Math.floor(Date.now() / 1000), guaranteeValue: value, blendAtRisk: risk, ...(await v2State(id)) }
+}
+
+/**
+ * Investment proposal and ratings, from the functions added in LeaseVault v2.
+ * On a deployment that predates them the simulation fails: v2 is then false and
+ * the app hides those features instead of showing made-up data.
+ */
+async function v2State(id: bigint): Promise<Pick<Snapshot, 'proposal' | 'ratings' | 'v2'>> {
+  try {
+    const [proposal, ratings] = await Promise.all([
+      reader.get_yield_proposal({ id }).then((t) => t.result ?? undefined),
+      reader.get_ratings({ id }).then((t) => t.result),
+    ])
+    return { proposal, ratings, v2: true }
+  } catch {
+    return { v2: false }
+  }
+}
+
+export interface Reputation {
+  count: number
+  /** Average score out of 5, or null before any rating. */
+  average: number | null
+}
+
+/** Scores an address received across all leases, or null on a pre-v2 deployment. */
+export async function reputationOf(address: string): Promise<Reputation | null> {
+  try {
+    const r = (await reader.get_reputation({ who: address })).result
+    return { count: r.count, average: r.count ? r.total / r.count : null }
+  } catch {
+    return null
+  }
 }
 
 export interface ChainEvent {
@@ -101,6 +134,8 @@ const PLAIN: Record<string, string> = {
   BlendIsSafe: 'The Blend position is healthy: only the parties can end the option.',
   SameParty: 'The tenant must be a different account from the landlord and the arbiter.',
   AlreadyConfirmed: 'You already confirmed this.',
+  AlreadyRated: 'You already rated this lease.',
+  InvalidScore: 'A rating is a whole number from 1 to 5.',
 }
 
 export const plainError = (e: unknown) => {

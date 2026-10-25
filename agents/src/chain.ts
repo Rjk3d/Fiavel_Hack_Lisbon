@@ -84,7 +84,24 @@ export async function snapshot(id: bigint, now = Math.floor(Date.now() / 1000)):
     c.guarantee_value({ id }).then((t) => t.result),
     c.blend_at_risk({ id }).then((t) => t.result),
   ]);
-  return { id, lease, claim, now, guaranteeValue: value, blendAtRisk: risk };
+  return { id, lease, claim, now, guaranteeValue: value, blendAtRisk: risk, ...(await v2State(c, id)) };
+}
+
+/**
+ * Investment proposal and ratings. A deployment that predates these functions
+ * fails the simulation: the snapshot then says v2 = false and the rule engine
+ * does not offer them.
+ */
+export async function v2State(c: Client, id: bigint): Promise<Pick<Snapshot, "proposal" | "ratings" | "v2">> {
+  try {
+    const [proposal, ratings] = await Promise.all([
+      c.get_yield_proposal({ id }).then((t) => t.result ?? undefined),
+      c.get_ratings({ id }).then((t) => t.result),
+    ]);
+    return { proposal, ratings, v2: true };
+  } catch {
+    return { v2: false };
+  }
 }
 
 export async function leaseCount(): Promise<bigint> {

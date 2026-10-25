@@ -21,7 +21,9 @@ use soroban_sdk::{
 };
 
 pub use blend::{BlendPoolClient, Positions, Request, Reserve, ReserveConfig, ReserveData};
-pub use types::{Claim, Config, DataKey, Error, Lease, Status, Terms};
+pub use types::{
+    Claim, Config, DataKey, Error, Lease, LeaseRatings, Reputation, Status, Terms, YieldProposal,
+};
 
 const BPS: i128 = 10_000;
 /// Anyone can pull a lease out of Blend above this utilization (7 decimals):
@@ -130,6 +132,40 @@ pub struct BlendExited {
     pub id: u64,
     pub realized: i128,
     pub gain: i128,
+}
+
+#[contractevent]
+pub struct YieldProposed {
+    #[topic]
+    pub id: u64,
+    #[topic]
+    pub proposer: Address,
+    pub keep: i128,
+}
+
+#[contractevent]
+pub struct YieldApproved {
+    #[topic]
+    pub id: u64,
+    #[topic]
+    pub approver: Address,
+}
+
+#[contractevent]
+pub struct YieldCancelled {
+    #[topic]
+    pub id: u64,
+    pub refunded: i128,
+}
+
+#[contractevent]
+pub struct Rated {
+    #[topic]
+    pub id: u64,
+    #[topic]
+    pub rater: Address,
+    pub ratee: Address,
+    pub score: u32,
 }
 
 #[contract]
@@ -390,6 +426,7 @@ impl LeaseVault {
         if now(&env) < lease.start + lease.terms.months as u64 * lease.terms.period {
             panic_with_error!(&env, Error::TooEarly);
         }
+        drop_proposal(&env, &config(&env), id, &lease);
         lease.ended_at = now(&env);
         lease.exit_hash = exit_hash;
         lease.status = Status::Ended;
@@ -549,7 +586,169 @@ impl LeaseVault {
         save(&env, id, &lease);
     }
 
+    // ── Invest the guarantee during the lease ───────────────────────────
+
+    /// A party proposes to lend part of the guarantee on Blend while the
+    /// lease runs. `keep` stays liquid in the contract and must cover at
+    /// least one month of rent. Nothing moves until the other party approves.
+    pub fn propose_yield(
+        env: Env,
+        id: u64,
+        who: Address,
+        keep: i128,
+        tenant_share_bps: u32,
+        landlord_share_bps: u32,
+    ) {
+        who.require_auth();
+        let cfg = config(&env);
+        let lease = load(&env, id);
+        require_status(&env, &lease, Status::Active);
+        require_party(&env, &lease, &who);
+        if lease.yield_active || lease.shares > 0 || proposal(&env, id).is_some() {
+            panic_with_error!(&env, Error::AlreadyConfirmed);
+        }
+        if tenant_share_bps as i128 + landlord_share_bps as i128 > BPS {
+            panic_with_error!(&env, Error::InvalidTerms);
+        }
+        if keep < lease.terms.rent || keep >= lease.liquid {
+            panic_with_error!(&env, Error::InvalidAmount);
+        }
+        let mut p = YieldProposal {
+            proposer: who.clone(),
+            keep,
+            tenant_share_bps,
+            landlord_share_bps,
+            buffer: lease.terms.deposit * lease.terms.buffer_bps as i128 / BPS,
+            tenant_ok: false,
+            landlord_ok: false,
+        };
+        approve_as(&env, &cfg, &lease, &mut p, &who);
+        save_proposal(&env, id, &p);
+        YieldProposed {
+            id,
+            proposer: who,
+            keep,
+        }
+        .publish(&env);
+    }
+
+    /// The other party approves the pending proposal. The second approval
+    /// places `liquid - keep` on Blend; the tenant's buffer joins the liquid part.
+    pub fn approve_yield(env: Env, id: u64, who: Address) {
+        who.require_auth();
+        let cfg = config(&env);
+        let mut lease = load(&env, id);
+        require_status(&env, &lease, Status::Active);
+        require_party(&env, &lease, &who);
+        let mut p =
+            proposal(&env, id).unwrap_or_else(|| panic_with_error!(&env, Error::NothingDue));
+        approve_as(&env, &cfg, &lease, &mut p, &who);
+        YieldApproved { id, approver: who }.publish(&env);
+
+        if !(p.tenant_ok && p.landlord_ok) {
+            save_proposal(&env, id, &p);
+            return;
+        }
+        // The liquid part may have shrunk since the proposal (unpaid month).
+        let to_place = lease.liquid - p.keep;
+        if to_place <= 0 {
+            panic_with_error!(&env, Error::InvalidAmount);
+        }
+        lease.terms.yield_offered = true;
+        lease.terms.tenant_share_bps = p.tenant_share_bps;
+        lease.terms.landlord_share_bps = p.landlord_share_bps;
+        lease.shares = blend_supply(&env, &cfg, to_place);
+        lease.placed = to_place;
+        lease.liquid = lease.liquid - to_place + p.buffer;
+        lease.yield_active = true;
+        env.storage()
+            .persistent()
+            .remove(&DataKey::YieldProposal(id));
+        save(&env, id, &lease);
+        BlendDeposited {
+            id,
+            amount: to_place,
+        }
+        .publish(&env);
+    }
+
+    /// Either party withdraws a pending proposal; a locked buffer goes back
+    /// to the tenant. Once placed, `exit_blend` brings the funds back.
+    pub fn cancel_yield(env: Env, id: u64, who: Address) {
+        who.require_auth();
+        let cfg = config(&env);
+        let lease = load(&env, id);
+        require_party(&env, &lease, &who);
+        if proposal(&env, id).is_none() {
+            panic_with_error!(&env, Error::NothingDue);
+        }
+        drop_proposal(&env, &cfg, id, &lease);
+    }
+
+    // ── Ratings ─────────────────────────────────────────────────────────
+
+    /// Once the lease is over, each party rates the other from 1 to 5, once.
+    /// Only the two parties of a real lease can rate, so scores cannot be
+    /// bought without signing and funding a lease.
+    pub fn rate(env: Env, id: u64, who: Address, score: u32) {
+        who.require_auth();
+        if !(1..=5).contains(&score) {
+            panic_with_error!(&env, Error::InvalidScore);
+        }
+        let lease = load(&env, id);
+        match lease.status {
+            Status::Ended | Status::Claimed | Status::Disputed | Status::Closed => {}
+            _ => panic_with_error!(&env, Error::WrongStatus),
+        }
+        require_party(&env, &lease, &who);
+        let mut ratings = Self::get_ratings(env.clone(), id);
+        let ratee = if who == lease.landlord {
+            if ratings.by_landlord.is_some() {
+                panic_with_error!(&env, Error::AlreadyRated);
+            }
+            ratings.by_landlord = Some(score);
+            tenant_of(&lease)
+        } else {
+            if ratings.by_tenant.is_some() {
+                panic_with_error!(&env, Error::AlreadyRated);
+            }
+            ratings.by_tenant = Some(score);
+            lease.landlord.clone()
+        };
+        let mut rep = Self::get_reputation(env.clone(), ratee.clone());
+        rep.count += 1;
+        rep.total += score;
+        keep_persistent(&env, &DataKey::Ratings(id), &ratings);
+        keep_persistent(&env, &DataKey::Reputation(ratee.clone()), &rep);
+        Rated {
+            id,
+            rater: who,
+            ratee,
+            score,
+        }
+        .publish(&env);
+    }
+
     // ── Views ───────────────────────────────────────────────────────────
+
+    pub fn get_yield_proposal(env: Env, id: u64) -> Option<YieldProposal> {
+        proposal(&env, id)
+    }
+
+    pub fn get_ratings(env: Env, id: u64) -> LeaseRatings {
+        env.storage()
+            .persistent()
+            .get(&DataKey::Ratings(id))
+            .unwrap_or_default()
+    }
+
+    /// Scores received by `who` across all leases: average = total / count.
+    pub fn get_reputation(env: Env, who: Address) -> Reputation {
+        env.storage()
+            .persistent()
+            .get(&DataKey::Reputation(who))
+            .unwrap_or_default()
+    }
 
     pub fn get_lease(env: Env, id: u64) -> Lease {
         load(&env, id)
@@ -626,6 +825,55 @@ fn save_claim(env: &Env, id: u64, claim: &Claim) {
     env.storage()
         .persistent()
         .extend_ttl(&key, TTL_THRESHOLD, TTL_EXTEND_TO);
+}
+
+fn keep_persistent<V: IntoVal<Env, soroban_sdk::Val>>(env: &Env, key: &DataKey, value: &V) {
+    env.storage().persistent().set(key, value);
+    env.storage()
+        .persistent()
+        .extend_ttl(key, TTL_THRESHOLD, TTL_EXTEND_TO);
+}
+
+fn proposal(env: &Env, id: u64) -> Option<YieldProposal> {
+    env.storage().persistent().get(&DataKey::YieldProposal(id))
+}
+
+fn save_proposal(env: &Env, id: u64, p: &YieldProposal) {
+    keep_persistent(env, &DataKey::YieldProposal(id), p);
+}
+
+/// Records `who`'s approval. The tenant locks the buffer at this point.
+fn approve_as(env: &Env, cfg: &Config, lease: &Lease, p: &mut YieldProposal, who: &Address) {
+    if *who == lease.landlord {
+        if p.landlord_ok {
+            panic_with_error!(env, Error::AlreadyConfirmed);
+        }
+        p.landlord_ok = true;
+    } else {
+        if p.tenant_ok {
+            panic_with_error!(env, Error::AlreadyConfirmed);
+        }
+        if p.buffer > 0 {
+            TokenClient::new(env, &cfg.token).transfer(
+                who,
+                &env.current_contract_address(),
+                &p.buffer,
+            );
+        }
+        p.tenant_ok = true;
+    }
+}
+
+/// Removes a pending proposal and gives a locked buffer back to the tenant.
+fn drop_proposal(env: &Env, cfg: &Config, id: u64, lease: &Lease) {
+    if let Some(p) = proposal(env, id) {
+        let refunded = if p.tenant_ok { p.buffer } else { 0 };
+        pay(env, cfg, &tenant_of(lease), refunded);
+        env.storage()
+            .persistent()
+            .remove(&DataKey::YieldProposal(id));
+        YieldCancelled { id, refunded }.publish(env);
+    }
 }
 
 fn require_status(env: &Env, lease: &Lease, status: Status) {

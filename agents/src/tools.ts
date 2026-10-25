@@ -116,6 +116,11 @@ function withCaller(fn: ContractFn, publicKey: string, args: Record<string, unkn
       return { who: publicKey, exit_hash: undefined, ...args };
     case "exit_blend":
       return { caller: publicKey, ...args };
+    case "propose_yield":
+    case "approve_yield":
+    case "cancel_yield":
+    case "rate":
+      return { who: publicKey, ...args };
     default:
       return args;
   }

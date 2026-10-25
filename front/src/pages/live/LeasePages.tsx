@@ -6,6 +6,8 @@ import { explainRule } from '@agents/explain'
 import { ActionPanel } from '../../components/live/ActionPanel'
 import { GuaranteeHero, InviteBox, LeaseRow, NextRentCard, NoFunds } from '../../components/live/cards'
 import { NewLeaseDialog } from '../../components/live/NewLeaseDialog'
+import { InvestCard } from '../../components/live/invest'
+import { PartiesCard } from '../../components/live/reputation'
 import { MONTH_PILL, months, statusOf, toActivity } from '../../components/live/lease-view'
 import { ActivityList } from '../../components/dashboard/ActivityList'
 import { AIInsightCard } from '../../components/ai/AIInsightCard'
@@ -279,6 +281,11 @@ function LeaseDetailBody({ view }: { view: LeaseView }) {
             ]}
           />
         </section>
+      </div>
+
+      <div className="grid gap-6 lg:grid-cols-2 lg:items-start">
+        <InvestCard view={view} />
+        <PartiesCard view={view} />
       </div>
 
       {claim && (

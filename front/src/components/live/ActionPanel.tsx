@@ -14,7 +14,11 @@ import {
   LogOut,
   Scale,
   ShieldCheck,
+  Sprout,
+  Star,
+  ThumbsUp,
   Undo2,
+  XCircle,
   type LucideIcon,
 } from 'lucide-react'
 import { actionsFor, type Action, type ContractFn } from '@agents/rules'
@@ -43,6 +47,10 @@ const ICON: Record<ContractFn, LucideIcon> = {
   resolve: Scale,
   release: ShieldCheck,
   exit_blend: ArrowDownToLine,
+  propose_yield: Sprout,
+  approve_yield: ThumbsUp,
+  cancel_yield: XCircle,
+  rate: Star,
 }
 
 /** The rule each action is about, shown in its dialog. */
@@ -60,6 +68,10 @@ const RULE: Partial<Record<ContractFn, RuleId>> = {
   resolve: 'arbitration',
   release: 'end_of_lease',
   exit_blend: 'yield_exit',
+  propose_yield: 'invest_during_lease',
+  approve_yield: 'invest_during_lease',
+  cancel_yield: 'invest_during_lease',
+  rate: 'rating',
 }
 
 /** What the current role can do on this lease right now, and what it cannot yet. */
@@ -129,6 +141,11 @@ export function ActionDialog({ view, action, onClose }: { view: LeaseView; actio
     return ''
   })
   const [useExisting, setUseExisting] = useState(!!lease.entry_hash)
+  // Invest during the lease: amount kept liquid and yield split (percent).
+  const [keep, setKeep] = useState(() => (Number(t.rent) / 1e7).toFixed(2))
+  const [tenantPct, setTenantPct] = useState('70')
+  const [landlordPct, setLandlordPct] = useState('20')
+  const [score, setScore] = useState(0)
   const [error, setError] = useState<string | null>(null)
   const id = view.id
 
@@ -181,6 +198,23 @@ export function ActionDialog({ view, action, onClose }: { view: LeaseView; actio
         case 'exit_blend':
           args = { id, caller: me }
           break
+        case 'propose_yield': {
+          const k = toUnits(keep || '0')
+          const ts = Math.round(Number(tenantPct) * 100)
+          const ls = Math.round(Number(landlordPct) * 100)
+          if (!Number.isFinite(ts) || !Number.isFinite(ls)) throw new Error('shares')
+          args = { id, who: me, keep: k, tenant_share_bps: ts, landlord_share_bps: ls }
+          guardArgs = { keep: k, tenant_share_bps: ts, landlord_share_bps: ls }
+          break
+        }
+        case 'approve_yield':
+        case 'cancel_yield':
+          args = { id, who: me }
+          break
+        case 'rate':
+          args = { id, who: me, score }
+          guardArgs = { score }
+          break
       }
     } catch {
       setError('Check the amount.')
@@ -210,7 +244,7 @@ export function ActionDialog({ view, action, onClose }: { view: LeaseView; actio
           <Button variant="secondary" onClick={onClose}>
             Cancel
           </Button>
-          <Button onClick={submit} disabled={!!live.busy} icon={<FileSignature size={16} />}>
+          <Button onClick={submit} disabled={!!live.busy || (action.fn === 'rate' && score === 0)} icon={<FileSignature size={16} />}>
             {live.busy ? 'Signing and submitting…' : 'Sign and submit'}
           </Button>
         </div>
@@ -284,6 +318,30 @@ export function ActionDialog({ view, action, onClose }: { view: LeaseView; actio
         </div>
       )}
 
+      {action.fn === 'propose_yield' && (
+        <InvestForm
+          liquid={lease.liquid}
+          rent={t.rent}
+          buffer={(t.deposit * BigInt(t.buffer_bps)) / 10_000n}
+          keep={keep}
+          setKeep={setKeep}
+          tenantPct={tenantPct}
+          setTenantPct={setTenantPct}
+          landlordPct={landlordPct}
+          setLandlordPct={setLandlordPct}
+        />
+      )}
+
+      {action.fn === 'rate' && (
+        <div className="mt-2">
+          <p className="text-[14px] text-ink-muted">
+            {live.role === 'tenant' ? 'How was your landlord during this lease?' : 'How was your tenant during this lease?'} Your score is public,
+            signed by your wallet, and can only be given once.
+          </p>
+          <StarPicker value={score} onChange={setScore} />
+        </div>
+      )}
+
       {rule && (
         <p className="mt-4 rounded-2xl bg-canvas px-4 py-3 text-[13px] leading-[19px] text-ink-muted">
           <span className="font-semibold text-ink">The rule · </span>
@@ -337,6 +395,19 @@ function factsFor(action: Action, view: LeaseView): { label: ReactNode; value: R
         : []
     case 'respond':
       return claim ? [{ label: 'Claimed by the landlord', value: usdc(claim.amount) }] : []
+    case 'approve_yield':
+    case 'cancel_yield': {
+      const p = view.snap.proposal
+      if (!p) return []
+      const fund = 10_000 - p.tenant_share_bps - p.landlord_share_bps
+      return [
+        { label: 'Stays in the contract', value: usdc(p.keep) },
+        { label: 'Lent on Blend', value: usdc(lease.liquid - p.keep) },
+        { label: 'Tenant buffer', value: `${usdc(p.buffer)}${p.tenant_ok ? ' · locked' : ''}` },
+        { label: 'Gain shared', value: `${p.tenant_share_bps / 100} % tenant · ${p.landlord_share_bps / 100} % landlord · ${fund / 100} % fund` },
+        { label: 'Approvals', value: `Tenant ${p.tenant_ok ? '✓' : '…'} · Landlord ${p.landlord_ok ? '✓' : '…'}` },
+      ]
+    }
     case 'exit_blend':
       return [
         { label: 'On Blend now', value: usdc(guaranteeValue - lease.liquid, { decimals: 4 }) },
@@ -353,5 +424,88 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
       <span className="mb-1.5 block text-[13px] font-semibold text-ink">{label}</span>
       {children}
     </label>
+  )
+}
+
+/** Proposal inputs: how much stays liquid, how the gain is split, and the result. */
+function InvestForm(p: {
+  liquid: bigint
+  rent: bigint
+  buffer: bigint
+  keep: string
+  setKeep: (v: string) => void
+  tenantPct: string
+  setTenantPct: (v: string) => void
+  landlordPct: string
+  setLandlordPct: (v: string) => void
+}) {
+  const keepUnits = safeUnits(p.keep)
+  const placed = p.liquid - keepUnits
+  const fund = 100 - (Number(p.tenantPct) || 0) - (Number(p.landlordPct) || 0)
+  const keptShare = p.liquid > 0n ? Math.min(100, Math.max(0, Number((keepUnits * 1000n) / p.liquid) / 10)) : 100
+  return (
+    <div className="mt-4 space-y-4">
+      <Field label={`Keep in the contract (at least one month: ${usdc(p.rent)})`}>
+        <input
+          inputMode="decimal"
+          value={p.keep}
+          onChange={(e) => p.setKeep(e.target.value)}
+          className="h-12 w-full rounded-2xl border border-line bg-canvas px-4 text-[16px] font-semibold outline-none focus:border-brand/40"
+        />
+      </Field>
+      <div>
+        <div className="flex h-3 overflow-hidden rounded-full bg-brand-tint" aria-hidden>
+          <div className="bg-ink/80" style={{ width: `${keptShare}%` }} />
+          <div className="flex-1 bg-brand" />
+        </div>
+        <div className="mt-2 flex justify-between text-[12px] text-ink-muted">
+          <span>Kept: {usdc(keepUnits > 0n ? keepUnits : 0n)}</span>
+          <span>Invested: {usdc(placed > 0n ? placed : 0n)}</span>
+        </div>
+      </div>
+      <div className="grid grid-cols-3 gap-3">
+        <Field label="Tenant %">
+          <input inputMode="decimal" value={p.tenantPct} onChange={(e) => p.setTenantPct(e.target.value)} className="h-11 w-full rounded-2xl border border-line bg-canvas px-3 text-[15px] outline-none focus:border-brand/40" />
+        </Field>
+        <Field label="Landlord %">
+          <input inputMode="decimal" value={p.landlordPct} onChange={(e) => p.setLandlordPct(e.target.value)} className="h-11 w-full rounded-2xl border border-line bg-canvas px-3 text-[15px] outline-none focus:border-brand/40" />
+        </Field>
+        <div>
+          <span className="mb-1.5 block text-[13px] font-semibold text-ink">Fund %</span>
+          <p className={cx('flex h-11 items-center rounded-2xl px-3 text-[15px]', fund < 0 ? 'bg-danger-tint text-danger' : 'bg-canvas text-ink-muted')}>{fund}</p>
+        </div>
+      </div>
+      <p className="text-[12px] leading-[17px] text-ink-muted">
+        Nothing moves until the other party approves. On approval the tenant locks a {usdc(p.buffer)} buffer that absorbs a Blend loss first;
+        withdrawing the proposal gives it back.
+      </p>
+    </div>
+  )
+}
+
+function StarPicker({ value, onChange }: { value: number; onChange: (v: number) => void }) {
+  const [hover, setHover] = useState(0)
+  const words = ['', 'Poor', 'Below expectations', 'Fine', 'Good', 'Excellent']
+  const shown = hover || value
+  return (
+    <div className="mt-4">
+      <div role="radiogroup" aria-label="Rating" className="flex gap-1.5" onMouseLeave={() => setHover(0)}>
+        {[1, 2, 3, 4, 5].map((n) => (
+          <button
+            key={n}
+            type="button"
+            role="radio"
+            aria-checked={value === n}
+            aria-label={`${n} out of 5`}
+            onClick={() => onChange(n)}
+            onMouseEnter={() => setHover(n)}
+            className="grid h-12 w-12 place-items-center rounded-2xl transition hover:bg-brand-tint"
+          >
+            <Star size={30} className={n <= shown ? 'fill-brand text-brand' : 'text-line'} />
+          </button>
+        ))}
+      </div>
+      <p className="mt-2 h-5 text-[14px] font-semibold text-brand">{words[shown]}</p>
+    </div>
   )
 }

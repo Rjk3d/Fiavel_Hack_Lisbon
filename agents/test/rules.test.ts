@@ -122,6 +122,50 @@ describe("rule engine", () => {
     assert.ok(fns(snap(l, T0 + 10), "tenant").includes("exit_blend"));
     assert.deepEqual(coordinatorDuties(snap(l, T0 + 10, { blendAtRisk: true })).map((a) => a.fn), ["exit_blend"]);
   });
+
+  it("offers to invest during the lease only on a v2 contract, then waits for the other party", () => {
+    const l = lease("Active", { yield_active: false });
+    assert.ok(!fns(snap(l, T0 + 10), "tenant").includes("propose_yield"));
+    assert.ok(fns(snap(l, T0 + 10, { v2: true }), "tenant").includes("propose_yield"));
+    assert.ok(fns(snap(l, T0 + 10, { v2: true }), "landlord").includes("propose_yield"));
+
+    const proposal = {
+      proposer: LANDLORD,
+      keep: 100n * U,
+      tenant_share_bps: 7000,
+      landlord_share_bps: 2000,
+      buffer: 10n * U,
+      tenant_ok: false,
+      landlord_ok: true,
+    };
+    const s = snap(l, T0 + 10, { v2: true, proposal });
+    assert.deepEqual(fns(s, "landlord").filter((f) => f.endsWith("_yield")), ["cancel_yield"]);
+    const approve = actionsFor(analyze(s), "tenant").find((a) => a.fn === "approve_yield")!;
+    assert.match(approve.label, /100\.00 USDC.*10\.00 USDC buffer/);
+    assert.equal(checkAction(s, "landlord", "approve_yield").ok, false);
+  });
+
+  it("guards the investment proposal like the contract", () => {
+    const s = snap(lease("Active"), T0 + 10, { v2: true });
+    const ok = (keep: bigint, t = 7000, l = 2000) =>
+      checkAction(s, "tenant", "propose_yield", { keep, tenant_share_bps: t, landlord_share_bps: l }).ok;
+    assert.ok(ok(100n * U));
+    assert.ok(!ok(99n * U)); // less than one month
+    assert.ok(!ok(200n * U)); // nothing left to invest
+    assert.ok(!ok(100n * U, 8000, 3000)); // shares above 100 %
+  });
+
+  it("lets each party rate the other once, after the lease", () => {
+    assert.ok(!fns(snap(lease("Active"), T0 + 10, { v2: true }), "tenant").includes("rate"));
+    const ended = lease("Closed");
+    assert.ok(fns(snap(ended, T0 + 10, { v2: true, ratings: {} }), "tenant").includes("rate"));
+    const s = snap(ended, T0 + 10, { v2: true, ratings: { by_tenant: 5 } });
+    assert.ok(!fns(s, "tenant").includes("rate"));
+    assert.ok(fns(s, "landlord").includes("rate"));
+    assert.equal(checkAction(s, "landlord", "rate", { score: 6 }).ok, false);
+    assert.equal(checkAction(s, "landlord", "rate", { score: 4 }).ok, true);
+    assert.ok(!fns(s, "arbiter").includes("rate"));
+  });
 });
 
 describe("rule explanations", () => {
@@ -140,5 +184,7 @@ describe("rule explanations", () => {
     assert.equal(ruleFor("what if Blend gets hacked?"), "yield_loss");
     assert.equal(ruleFor("when do I get my deposit back"), "end_of_lease");
     assert.equal(ruleFor("can I have a cat?"), undefined);
+    assert.equal(ruleFor("how do ratings work"), "rating");
+    assert.equal(ruleFor("approve the investment"), "invest_during_lease");
   });
 });

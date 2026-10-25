@@ -10,6 +10,7 @@ import { NETWORK, explorerAccount, short } from '../../stellar/config'
 import { ROLES, type LiveRole } from '../../stellar/wallets'
 import { clock, duration, relative, usdc } from '../../stellar/format'
 import { milestones, statusOf, yieldOf } from './lease-view'
+import { ReputationBadge } from './reputation'
 import { cx } from '../../lib/cx'
 
 const ROLE_ICON: Record<LiveRole, typeof KeyRound> = { tenant: KeyRound, landlord: Building2, arbiter: Scale }
@@ -68,6 +69,11 @@ export function WalletCard() {
       >
         {short(live.wallet.address)} {copied ? <Check size={13} /> : <Copy size={13} />}
       </button>
+      {live.role !== 'arbiter' && (
+        <div className="mt-2">
+          <ReputationBadge address={live.wallet.address} compact />
+        </div>
+      )}
       <div className="mt-3 grid grid-cols-2 gap-2 text-[13px]">
         <div>
           <p className="text-ink-muted">USDC</p>

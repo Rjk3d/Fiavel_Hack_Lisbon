@@ -126,6 +126,10 @@ const EVENT_TEXT: Record<string, (d: Record<string, unknown>) => [string, string
   claim_answered: (d) => ['Tenant answered', `Offer: ${usdc(BigInt(d.offer as bigint))}`, 'claim', 'brand'],
   lease_settled: (d) => ['Settled', `${usdc(BigInt(d.to_landlord as bigint))} to the landlord · ${usdc(BigInt(d.to_tenant as bigint))} to the tenant`, 'deposit', 'success'],
   lease_refunded: (d) => ['Refunded (no move-in)', `${usdc(BigInt(d.amount as bigint))} back to the tenant`, 'deposit', 'neutral'],
+  yield_proposed: (d) => ['Investment proposed', `${usdc(BigInt(d.keep as bigint))} would stay in the contract · waiting for the other party`, 'deposit', 'brand'],
+  yield_approved: () => ['Investment approved', 'One party approved the proposal', 'deposit', 'brand'],
+  yield_cancelled: (d) => ['Investment proposal withdrawn', BigInt(d.refunded as bigint) > 0n ? `${usdc(BigInt(d.refunded as bigint))} buffer back to the tenant` : 'Nothing was invested', 'deposit', 'neutral'],
+  rated: (d) => [`Rated ${Number(d.score)}/5`, 'A party of the lease rated the other', 'review', 'success'],
   blend_exited: (d) => ['Back from Blend', `Yield ${usdc(BigInt(d.gain as bigint), { decimals: 7 })}`, 'deposit', 'brand'],
 }
 

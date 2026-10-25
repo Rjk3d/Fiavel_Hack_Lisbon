@@ -27,11 +27,12 @@ The contract IDs come from `../deployments/testnet.json`. `VITE_LEASE_VAULT_ID`,
 | Route | What |
 |---|---|
 | `/` | Landing page (illustrative preview with demo data) |
+| `/welcome` | Optional sign-in: team account (unlocks demo tools) or continue as a guest |
 | `/app` | Overview for the current role: guarantee, actions, next rent, activity |
-| `/app/lease`, `/app/leases/:id` | Leases, and one lease: actions, deadlines, terms, months, claim, history, on-chain links |
+| `/app/lease`, `/app/leases/:id` | Leases, and one lease: actions, deadlines, terms, investment, parties & reputation, months, claim, history, on-chain links |
 | `/app/join/:id` | Invite link: the Tenant Guardian explains the terms, the tenant funds |
 | `/app/payments` | Months of every lease, pay rent or take an unpaid month |
-| `/app/deposit` | Guarantee: liquid part, Blend part, yield so far, projection |
+| `/app/deposit` | Guarantee: liquid part, Blend part, yield so far, investment proposal and approvals, projection |
 | `/app/assistant` | Tenant Guardian / Landlord Assistant / Arbiter Desk (`?q=` asks a question) |
 | `/app/activity` | Contract events, filterable, each with its transaction |
 
@@ -46,6 +47,20 @@ The contract IDs come from `../deployments/testnet.json`. `VITE_LEASE_VAULT_ID`,
 - `src/components/live/` — action panel and dialogs (one per contract function), cards, lease mappings, the
   deterministic assistant.
 - `api/blend-faucet.ts` + `vercel.json` — production relay for Blend's faucet (the dev server proxies it).
+
+## Sign-in (optional)
+
+Entering `/app` shows `/welcome` once per tab: sign in as the team, or continue as a guest. Both get the full app;
+the team session adds demo tools (fund the three wallets in one click). The password is stored only as a PBKDF2-SHA256
+hash in `src/lib/auth.ts`; rotate it with `node scripts/hash-password.mjs "<password>"` and put the printed
+`VITE_ADMIN_*` values in `front/.env.local`. This is a client-side check for demos, not access control.
+
+## Ratings and investing during the lease (LeaseVault v2)
+
+Both need the v2 contract (`rate`, `propose_yield`, `approve_yield`, `cancel_yield`). On an older deployment the
+reads fail, the snapshot says `v2: false`, and the app hides these actions instead of inventing data.
+Redeploy with `scripts/deploy-testnet.sh` after `stellar contract build`, then regenerate the client
+(`stellar contract bindings typescript --wasm target/wasm32v1-none/release/lease_vault.wasm --output-dir packages/lease-vault-client --overwrite`).
 
 ## Wallets
 

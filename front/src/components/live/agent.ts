@@ -26,12 +26,15 @@ const INTENTS: { re: RegExp; fn: ContractFn; args?: (v: LeaseView) => Record<str
   { re: /end the lease|move out|moving out|finish the lease/, fn: 'end_lease' },
   { re: /stop (the )?yield|exit blend|opt.?out|withdraw from blend/, fn: 'exit_blend' },
   { re: /accept (the )?counter/, fn: 'accept_counter' },
+  { re: /\brate\b|leave a (rating|review)|give .* stars?/, fn: 'rate' },
+  { re: /approve (the )?invest/, fn: 'approve_yield' },
+  { re: /invest (my|the) (deposit|guarantee)|propose (an )?invest/, fn: 'propose_yield' },
   { re: /refund|never moved/, fn: 'refund_no_keys' },
 ]
 
 export const PROMPTS: Record<Role, string[]> = {
-  tenant: ['What can I do now?', 'When do I get my deposit back?', 'What if Blend loses money?', 'Pay this month'],
-  landlord: ['What can I do now?', 'Seize the whole guarantee now', 'What if the rent is late?', 'How does a damage claim work?'],
+  tenant: ['What can I do now?', 'When do I get my deposit back?', 'Invest my guarantee', 'How do ratings work?', 'Pay this month'],
+  landlord: ['What can I do now?', 'Seize the whole guarantee now', 'Invest the guarantee', 'Rate my tenant', 'How does a damage claim work?'],
   arbiter: ['What can I do now?', 'How does arbitration work?', 'What happens to the bond?'],
   anyone: [],
 }

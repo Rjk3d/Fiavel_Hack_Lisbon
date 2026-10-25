@@ -12,6 +12,9 @@ import {
   Scale,
   ShieldCheck,
   Sparkles,
+  Sprout,
+  Star,
+  Lock,
   Building2,
   Wallet,
   X,
@@ -38,6 +41,7 @@ export function LandingPage() {
       <Hero />
       <Problem />
       <HowItWorks />
+      <TwoWayTrust />
       <Agents />
       <Trust />
       <FinalCTA />
@@ -79,6 +83,9 @@ function PublicNav() {
         <Pill tone="brand" dot className="hidden sm:inline-flex">
           Testnet demo
         </Pill>
+        <Link to="/welcome" className="hidden rounded-full px-3.5 py-2 text-[14px] font-medium text-ink-muted transition hover:bg-canvas hover:text-ink sm:inline-flex">
+          Sign in
+        </Link>
         <ButtonLink to="/app" size="sm" className="hidden sm:inline-flex">
           Explore demo
         </ButtonLink>
@@ -242,6 +249,60 @@ function HowItWorks() {
             </li>
           ))}
         </ol>
+      </div>
+    </section>
+  )
+}
+
+function TwoWayTrust() {
+  return (
+    <section id="features" className="scroll-mt-16 border-t border-line py-20 sm:py-28">
+      <div className="mx-auto max-w-[1200px] px-4 sm:px-6 lg:px-8">
+        <SectionTitle
+          eyebrow="Built into the contract"
+          title="Trust that works both ways."
+          sub="Two features that no deposit scheme in Portugal offers today, both enforced on Stellar rather than promised in a PDF."
+        />
+        <div className="mt-12 grid gap-5 lg:grid-cols-2">
+          <article className="card p-6 sm:p-8">
+            <span className="grid h-11 w-11 place-items-center rounded-2xl bg-brand-tint text-brand">
+              <Star size={20} />
+            </span>
+            <h3 className="mt-5 text-[22px] font-semibold tracking-[-0.02em]">Ratings that cannot be faked</h3>
+            <p className="mt-2 text-[15px] leading-[24px] text-ink-muted">
+              When a lease ends, the tenant rates the landlord and the landlord rates the tenant, from 1 to 5, once each. Only the two wallets of a funded
+              lease can do it, so a reputation needs real rentals behind it.
+            </p>
+            <div className="mt-6 flex items-center gap-4 rounded-2xl bg-canvas px-4 py-3">
+              <span className="inline-flex gap-0.5" aria-hidden>
+                {[1, 2, 3, 4, 5].map((n) => (
+                  <Star key={n} size={18} className={n <= 4 ? 'fill-brand text-brand' : 'text-line'} />
+                ))}
+              </span>
+              <span className="text-[13px] text-ink-muted">Average and count read from the contract, per address</span>
+            </div>
+          </article>
+          <article className="card p-6 sm:p-8">
+            <span className="grid h-11 w-11 place-items-center rounded-2xl bg-brand-tint text-brand">
+              <Sprout size={20} />
+            </span>
+            <h3 className="mt-5 text-[22px] font-semibold tracking-[-0.02em]">Invest the deposit, only if both agree</h3>
+            <p className="mt-2 text-[15px] leading-[24px] text-ink-muted">
+              Either side proposes to lend part of the guarantee on Blend and chooses how much stays put. Nothing moves until the other side approves.
+              At least one month always stays in the contract, so unpaid rent is covered instantly.
+            </p>
+            <div className="mt-6">
+              <div className="flex h-3 overflow-hidden rounded-full" aria-hidden>
+                <div className="w-[38%] bg-ink/85" />
+                <div className="flex-1 bg-brand" />
+              </div>
+              <div className="mt-2 flex justify-between text-[12px] text-ink-muted">
+                <span className="inline-flex items-center gap-1.5"><Lock size={12} /> Kept: one month or more</span>
+                <span className="inline-flex items-center gap-1.5"><Sprout size={12} /> Invested with both approvals</span>
+              </div>
+            </div>
+          </article>
+        </div>
       </div>
     </section>
   )
