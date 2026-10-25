@@ -46,7 +46,7 @@ _TODO: diagram._
 | OpenZeppelin policy | Limits the landlord's agent to `claim_unpaid` | _TODO_ |
 | Coordinator agent wallet (Stellar CLI) | Calls public deadline functions | _TODO_ |
 | USDC (SAC, testnet) | Rent and guarantee asset | _TODO_ |
-| Blend (testnet pool) | Optional yield on the guarantee | _TODO_ |
+| Blend (testnet USDC pool) | Opt-in yield, accepted by both parties; one month always liquid, tenant buffer absorbs losses | _TODO_ |
 
 ## Setup
 
@@ -81,5 +81,5 @@ Before the hackathon: product research and planning (`docs/PLAN.md`), repository
 
 ## Use of AI
 
-- **In the product:** AI agents (Claude API with tools) explain lease rules and prepare unsigned transactions; they never sign for users.
+- **In the product:** none. Fiável agents are deterministic (rule engine, no LLM): they explain lease rules from templates filled with on-chain values and prepare unsigned transactions; they never sign for users.
 - **To build:** AI-assisted coding. _TODO: link to prompt log._
