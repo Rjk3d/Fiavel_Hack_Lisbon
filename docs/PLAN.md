@@ -46,24 +46,24 @@ Argument jury : « Nos agents ne peuvent pas halluciner : chaque message et chaq
 
 | ID | Feature | Priorité | Statut |
 |---|---|---|---|
-| A1 | `create_lease` : loyer, garantie, délais paramétrables (mode démo), arbitre, option Blend + partage | Must | À faire |
-| A2 | `fund` : verrouille loyer 1 + garantie (+ coussin si option) en USDC, accord du locataire enregistré | Must | À faire |
-| A3 | `confirm_move_in` : hash de l'état des lieux, libère le loyer 1 | Must | À faire |
-| A4 | `pay_rent` : paie un mois et le marque payé | Must | À faire |
-| A5 | `claim_unpaid` : prélève un impayé après le délai de grâce (mois liquide d'abord) | Must | À faire |
-| A6 | `end_lease` : hash de sortie, ouvre la fenêtre de réclamation | Must | À faire |
-| A7 | `release` : rend la garantie sans réclamation, appel public | Must | À faire |
-| A8 | `claim_damage` : la part non contestée est rendue aussitôt | Must | À faire |
-| A9 | `respond` (accepter) + `execute_claim` si le locataire se tait | Must | À faire |
-| A10 | Événements à chaque action + lecture `get_lease` | Must | À faire |
-| A11 | Tests unitaires des règles, cas de refus compris | Must | À faire |
-| A12 | Contre-offre dans `respond` | Should | À faire |
-| A13 | `refund_no_keys` : tout revient au locataire sans remise des clés | Should | À faire |
-| A14 | Caution de litige de 20 € | Should | À faire |
-| A15 | `resolve` : arbitrage borné | Should | À faire |
-| **A16a** | **Blend : dépôt de (garantie − 1 mois) au `fund`, retrait au `release` / `claim_unpaid` ; coussin absorbe les pertes** | **Must (démarre à H14)** | À faire |
-| A16b | `exit_blend` public : rapatrie tout si la valeur ou la liquidité passe sous un seuil | Should | À faire |
-| A16c | Partage du rendement 70/20/10 au `release` | Should | À faire |
+| A1 | `create_lease` : loyer, garantie, délais paramétrables (mode démo), arbitre, option Blend + partage | Must | Fait |
+| A2 | `fund` : verrouille loyer 1 + garantie (+ coussin si option) en USDC, accord du locataire enregistré | Must | Fait |
+| A3 | `confirm_move_in` : hash de l'état des lieux, libère le loyer 1 | Must | Fait |
+| A4 | `pay_rent` : paie un mois et le marque payé | Must | Fait |
+| A5 | `claim_unpaid` : prélève un impayé après le délai de grâce (mois liquide d'abord) | Must | Fait |
+| A6 | `end_lease` : hash de sortie, ouvre la fenêtre de réclamation | Must | Fait |
+| A7 | `release` : rend la garantie sans réclamation, appel public | Must | Fait |
+| A8 | `claim_damage` : la part non contestée est rendue aussitôt | Must | Fait |
+| A9 | `respond` (accepter) + `execute_claim` si le locataire se tait | Must | Fait |
+| A10 | Événements à chaque action + lecture `get_lease` | Must | Fait |
+| A11 | Tests unitaires des règles, cas de refus compris | Must | Fait (23 tests) |
+| A12 | Contre-offre dans `respond` | Should | Fait |
+| A13 | `refund_no_keys` : tout revient au locataire sans remise des clés | Should | Fait |
+| A14 | Caution de litige de 20 € | Should | Fait |
+| A15 | `resolve` : arbitrage borné | Should | Fait |
+| **A16a** | **Blend : dépôt de (garantie − 1 mois) au `fund`, retrait au `release` / `claim_unpaid` ; coussin absorbe les pertes** | **Must (démarre à H14)** | Fait (testé sur testnet) |
+| A16b | `exit_blend` public : rapatrie tout si la valeur ou la liquidité passe sous un seuil | Should | Fait |
+| A16c | Partage du rendement 70/20/10 au `release` | Should | Fait |
 
 ## B. Comptes et wallets
 
@@ -71,7 +71,7 @@ Argument jury : « Nos agents ne peuvent pas halluciner : chaque message et chaq
 |---|---|---|---|---|
 | B1 | Smart accounts passkey (OpenZeppelin smart-account-kit) pour les deux rôles | Must | Dev B | À faire |
 | B2 | Bouton « USDC de test » pour alimenter les comptes | Must | Dev B | À faire |
-| B3 | Wallet de l'agent coordinateur (CLI Stellar), frais seulement | Must | C | À faire |
+| B3 | Wallet de l'agent coordinateur (CLI Stellar), frais seulement | Must | C | Fait |
 | B4 | Frais sponsorisés : pas besoin d'XLM | Should | Dev B | À faire |
 | **B5** | **Politique OZ sur le smart account : l'agent du propriétaire ne peut appeler que `claim_unpaid`** | **Must** | Dev A | À faire |
 | B6 | Retrait vers la banque via un anchor SEP-24 de test | Could | Dev B | À faire |
@@ -100,18 +100,18 @@ Argument jury : « Nos agents ne peuvent pas halluciner : chaque message et chaq
 
 | ID | Feature | Priorité | Statut |
 |---|---|---|---|
-| D1 | Moteur de règles (TypeScript) : état du bail → messages modèles + actions proposées | Must | À faire |
-| D2 | Outil `get_lease_status` | Must | À faire |
-| D3 | Outil `get_rent_history` (via les événements) | Must | À faire |
-| D4 | Outil `explain_lease_rule` : un modèle par règle, rempli avec les valeurs on-chain | Must | À faire |
-| D5 | Outil `request_contract_action` : transaction non signée, signée par l'utilisateur | Must | À faire |
-| D6 | Garde-fous : rôle, bail et montant vérifiés avant de proposer une action | Must | À faire |
-| D7 | Tenant Guardian : panneau d'assistant côté locataire (questions et actions guidées) | Must | À faire |
-| D8 | Lease Coordinator : boucle qui appelle les fonctions publiques à l'expiration des délais, et `exit_blend` si besoin | Must | À faire |
-| D9 | Scène de refus « saisis la caution maintenant » : explication + appel rejeté par le contrat | Must | À faire |
-| D10 | Landlord Assistant : même moteur, règles côté propriétaire | Should | À faire |
+| D1 | Moteur de règles (TypeScript) : état du bail → messages modèles + actions proposées | Must | Fait |
+| D2 | Outil `get_lease_status` | Must | Fait |
+| D3 | Outil `get_rent_history` (via les événements) | Must | Fait |
+| D4 | Outil `explain_lease_rule` : un modèle par règle, rempli avec les valeurs on-chain | Must | Fait |
+| D5 | Outil `request_contract_action` : transaction non signée, signée par l'utilisateur | Must | Fait |
+| D6 | Garde-fous : rôle, bail et montant vérifiés avant de proposer une action | Must | Fait |
+| D7 | Tenant Guardian : panneau d'assistant côté locataire (questions et actions guidées) | Must | Moteur prêt, UI à faire |
+| D8 | Lease Coordinator : boucle qui appelle les fonctions publiques à l'expiration des délais, et `exit_blend` si besoin | Must | Fait |
+| D9 | Scène de refus « saisis la caution maintenant » : explication + appel rejeté par le contrat | Must | Fait (démo testnet) |
+| D10 | Landlord Assistant : même moteur, règles côté propriétaire | Should | Moteur prêt, UI à faire |
 | D11 | Outil `prepare_claim` : réclamation avec preuves | Should | À faire |
-| D12 | Journal visible des actions des agents | Should | À faire |
+| D12 | Journal visible des actions des agents | Should | Journal coordinateur fait, UI à faire |
 | D13 | Rappels proactifs | Could | À faire |
 
 ## E. Preuves et soumission — C
@@ -121,8 +121,8 @@ Argument jury : « Nos agents ne peuvent pas halluciner : chaque message et chaq
 | E9 | Préflight : Rust + CLI Stellar, contrat « hello world » sur testnet | Must | **Fait** |
 | E1 | 5 interviews + comptage d'annonces Idealista/OLX | Must | À faire |
 | E2 | README : problème, setup, variables, démo, travail antérieur, usage de l'IA | Must | En cours |
-| E3 | Schéma d'architecture + ID des contrats (LeaseVault, pool Blend, politique OZ) | Must | À faire |
-| E4 | Liens des transactions testnet (financement, dépôt Blend, impayé, refus, libération) | Must | À faire |
+| E3 | Schéma d'architecture + ID des contrats (LeaseVault, pool Blend, politique OZ) | Must | En cours (README) |
+| E4 | Liens des transactions testnet (financement, dépôt Blend, impayé, refus, libération) | Must | Fait (démo testnet) |
 | E5 | Vidéo de 2 à 4 min | Must | À faire |
 | E6 | Deck PDF (dont slides rendement 30 ans et vision obligations tokenisées) | Must | À faire |
 | E7 | Journal des prompts (IA utilisée pour coder) | Must | À faire |
