@@ -2,3 +2,4 @@
 renders/
 capture/replay/target/
 work-*/
+.*.hf-transaction-*/
