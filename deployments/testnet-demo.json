@@ -1,35 +1,43 @@
 {
-  "leaseVault": "CCPX4XT2EJQQKG2JCFPIWHQDFLO46QTBN5BP7VQQW22HEMZO7NTBTKMD",
-  "lease": "0",
-  "ranAt": "2026-10-25T14:19:59.632Z",
+  "leaseVault": "CB3RTZPIIKNJFNR6S5DUY37RUPBTEWFLFCHO5Y7YORPSAC5EDFYWH3JO",
+  "lease": "4",
+  "ranAt": "2026-10-26T10:25:17.564Z",
   "steps": [
     {
       "step": "create_lease",
-      "tx": "https://stellar.expert/explorer/testnet/tx/2ff3fff2f1d3932e7a3ce308bac47373e9744c8fcc56626b7f8ef7093fba1ca2"
+      "tx": "https://stellar.expert/explorer/testnet/tx/ac25012e736eaf183d9485b06b7c70a743522a0f22c6e6af036a541c10d35ba1"
     },
     {
       "step": "fund (Blend deposit)",
-      "tx": "https://stellar.expert/explorer/testnet/tx/b8679d0697b4d948a951aef1b6004f96ed5dd569170ae94b1d58b609350f0855"
+      "tx": "https://stellar.expert/explorer/testnet/tx/5542bb7675d6497244bdbbb95bce83fe88c86b016c7ae03b0b2c32154cc191af"
     },
     {
       "step": "confirm_move_in",
-      "tx": "https://stellar.expert/explorer/testnet/tx/8b9311edd5dc1197d98fa33c6d99c9c43bb0247345c9c6d7ad0838b6c14c9cfc"
+      "tx": "https://stellar.expert/explorer/testnet/tx/defdccdc59aaad6ba997254a60584e3194102e69b1287a2acc9e5547f3d0306c"
     },
     {
       "step": "pay_rent",
-      "tx": "https://stellar.expert/explorer/testnet/tx/170e73c83a32bbecc27a654a0d88bd1d1d737649061d8b7ed1885086aa758291"
+      "tx": "https://stellar.expert/explorer/testnet/tx/6799074b1b32b99b2399fec3d0480ad57c01c3f05d810f262cb278c8b7a25885"
     },
     {
       "step": "claim_unpaid",
-      "tx": "https://stellar.expert/explorer/testnet/tx/30b73464869e6837d45929d969c745a9f3f9f79ce6c31d558b7580e47cd50ac2"
+      "tx": "https://stellar.expert/explorer/testnet/tx/e31ac20eb3e6448ec5e2ae7bef6a2a546a6d7d10eb357595a24a7e06256dfbc9"
     },
     {
       "step": "end_lease",
-      "tx": "https://stellar.expert/explorer/testnet/tx/627220765acacb9a5edd4d1653b5d39b9b70fa9e02018d16691f6470e67910f3"
+      "tx": "https://stellar.expert/explorer/testnet/tx/a573937dd8c5bb5fe8c61c7c4c3fd19c36bf595ebd4cb77c74ab0139321e3c58"
     },
     {
       "step": "coordinator release",
-      "tx": "https://stellar.expert/explorer/testnet/tx/2ee01ef72c591f0780a2f9b63a883ce363feae392164d5fca3a969ec3c2cdc5c"
+      "tx": "https://stellar.expert/explorer/testnet/tx/74409d676fa44a48a9b662ed0747cc27b357307a1411bf043304930ca0d03991"
+    },
+    {
+      "step": "rate (tenant rates landlord 5/5, counted)",
+      "tx": "https://stellar.expert/explorer/testnet/tx/d79c7e14c6f85a2e08b229259cccfd36137a218701d3a2d3ea2170963ac59c93"
+    },
+    {
+      "step": "rate (landlord rates tenant 4/5, counted)",
+      "tx": "https://stellar.expert/explorer/testnet/tx/cec1b5d3f10ec71b9b483fef806daac5dbb19706085af096db66cb5fefdfb617"
     }
   ]
 }
