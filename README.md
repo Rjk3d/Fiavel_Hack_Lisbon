@@ -12,6 +12,8 @@ Built for HackMeridian.
 
 **Live app: https://fiavel-hack-lisbon.vercel.app/app** (Stellar Testnet, nothing to install)
 
+**Demo video: https://youtu.be/VFZncpLRWP0** (Fiável — A New Way to Rent)
+
 1. On the welcome screen, choose **Continue as a guest** → **Enter the app**. The app creates three testnet wallets in your browser (tenant, landlord, arbiter).
 2. Click **Get test funds** for each role (Friendbot XLM and Blend test USDC).
 3. Switch to **Landlord** → **New lease** (demo mode: 1 month = 1 minute), copy the invite link, switch to **Tenant** and open it.
@@ -170,7 +172,7 @@ The web app's AI language help (translate, polish, summarize in the chat) needs 
 ## Demo
 
 - **Public app:** https://fiavel-hack-lisbon.vercel.app/app (Vercel, root directory `front`, no environment variable needed)
-- **Video (2–4 min):** _link to add_
+- **Video:** https://youtu.be/VFZncpLRWP0
 
 The public demo runs without an Anthropic API key: the two optional AI helpers (chat language help, photo inventory analysis) show that they are off, and everything else works, including the agents, which never used a language model.
 
