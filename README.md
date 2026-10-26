@@ -21,7 +21,7 @@ This additional `frontend/` demo does not replace the existing `front/` applicat
 | Branch | Content |
 |---|---|
 | `main` | Contract, agents and the web app connected to Stellar Testnet. Everything to judge is here |
-| `frontend-yacin` | An alternative front-end prototype (`frontend/`, demo data), not merged: `front/` was kept as the base |
+| `frontend-yacin` | Source branch of the reputation demo (`frontend/`), now included in `main`; `front/` remains the existing connected application |
 
 ## Repository layout
 

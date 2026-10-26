@@ -29,4 +29,6 @@ For the preserved application and agents, first install/build `packages/lease-va
 
 An initial browser run timed out while closing Chrome during concurrent Rust builds; the complete isolated rerun passed. An initial agents test failed before executing business assertions because the sandbox could not resolve its Windows account (`uv_os_get_passwd`); the rerun with the normal account passed. An optional local YAML parser was unavailable; the workflow uses the same GitHub Actions structure as the existing CI and its hosted result is not claimed here.
 
-The integration is published to `frontend-yacin`, not directly to `main`. Publishing the branch does not deploy the alternate demo or activate live reputation in `front/`. Production activation requires a separate authenticated integration and review of verified tenancy evidence.
+The integration was first published to `frontend-yacin`. On 26 October 2026, the user explicitly requested its publication to `main`. The existing main commit `18481c6` is an ancestor of the tested integration commit `1ca4bfa`, so integration into main uses a fast-forward and preserves all existing history. Only these publication notes change after that tested integration.
+
+Publishing to main does not by itself deploy the alternate demo or activate live reputation in `front/`. The reputation workflow is available under `frontend/`; production activation requires a separate authenticated integration and review of verified tenancy evidence.
