@@ -223,6 +223,21 @@ The agents are deterministic: `src/rules.ts` mirrors every condition of the cont
 | Arbiter silent for 2 minutes: settled at the tenant's offer, 50 USDC to the landlord and 50 to the tenant (halfway would have been 75 / 25) | [f70951d3…](https://stellar.expert/explorer/testnet/tx/f70951d3a713a4a14b28c5bd5b8d728ee271c13413f3d2b223a639bc922fa499) |
 | Mediator registry: deploy's mediator, then the web app's arbiter wallet joining by signing (open registry on testnet) | [b6e12f23…](https://stellar.expert/explorer/testnet/tx/b6e12f2378e748246fca9f481749943f5905777c6d4451d1da7b4e1b4c6b92cc), [07b66a5e…](https://stellar.expert/explorer/testnet/tx/07b66a5e4db92c23c266273c353eab367b28a676d8e9f05fa45b1b14947f2fb1) |
 
+Lease #4 on v5, the full pitch scenario played by the agents' CLI (`npm run demo`) on 26 October, then rated by both parties.
+Every link is in [`deployments/testnet-demo.json`](deployments/testnet-demo.json):
+
+| Step | Transaction |
+|---|---|
+| Landlord creates the lease (yield offered) | [ac25012e…](https://stellar.expert/explorer/testnet/tx/ac25012e736eaf183d9485b06b7c70a743522a0f22c6e6af036a541c10d35ba1) |
+| Tenant funds; guarantee minus one month supplied to Blend | [5542bb76…](https://stellar.expert/explorer/testnet/tx/5542bb7675d6497244bdbbb95bce83fe88c86b016c7ae03b0b2c32154cc191af) |
+| Move-in co-signed, first rent released (then "seize the whole guarantee now" refused by the guard and by the contract, `WrongStatus`) | [defdccdc…](https://stellar.expert/explorer/testnet/tx/defdccdc59aaad6ba997254a60584e3194102e69b1287a2acc9e5547f3d0306c) |
+| Rent paid | [6799074b…](https://stellar.expert/explorer/testnet/tx/6799074b1b32b99b2399fec3d0480ad57c01c3f05d810f262cb278c8b7a25885) |
+| Unpaid month taken from the guarantee | [e31ac20e…](https://stellar.expert/explorer/testnet/tx/e31ac20eb3e6448ec5e2ae7bef6a2a546a6d7d10eb357595a24a7e06256dfbc9) |
+| Lease ended, exit inventory recorded | [a573937d…](https://stellar.expert/explorer/testnet/tx/a573937dd8c5bb5fe8c61c7c4c3fd19c36bf595ebd4cb77c74ab0139321e3c58) |
+| Coordinator releases: Blend withdrawal, about 110 USDC back to the tenant with her yield share | [74409d67…](https://stellar.expert/explorer/testnet/tx/74409d676fa44a48a9b662ed0747cc27b357307a1411bf043304930ca0d03991) |
+| Tenant rates the landlord 5/5, counted in `get_reputation` (3-month lease, 200 USDC guarantee) | [d79c7e14…](https://stellar.expert/explorer/testnet/tx/d79c7e14c6f85a2e08b229259cccfd36137a218701d3a2d3ea2170963ac59c93) |
+| Landlord rates the tenant 4/5, counted | [cec1b5d3…](https://stellar.expert/explorer/testnet/tx/cec1b5d3f10ec71b9b483fef806daac5dbb19706085af096db66cb5fefdfb617) |
+
 Earlier versions, kept as history.
 
 LeaseVault v3 (`CCSWLUOQ…SEJAZ`), two leases played in the web app:
@@ -247,7 +262,7 @@ LeaseVault v2 (`CDR2QYEL…GBRXP`), lease #0 played in the web app, then lease #
 | Release: back from Blend, refund to the tenant | [bed082ad…](https://stellar.expert/explorer/testnet/tx/bed082ada5e1f0e78713c5b83546e4779637908601408e61af90a36017b0811c) |
 | Rating on a 1-minute lease: recorded, not counted | [cd13c0c0…](https://stellar.expert/explorer/testnet/tx/cd13c0c0e28573a93471c27b84560264e5f5c407711f2ab85f8486dcff80f9c9) |
 
-Earlier demo run (lease #0 on LeaseVault v1 `CCPX4XT2…TKMD`, by the agents' CLI), from [`deployments/testnet-demo.json`](deployments/testnet-demo.json):
+Earlier demo run (lease #0 on LeaseVault v1 `CCPX4XT2…TKMD`, by the agents' CLI):
 
 | Step | Transaction |
 |---|---|
