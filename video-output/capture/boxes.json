@@ -1,0 +1,534 @@
+{
+ "overview-tenant": {
+  "Your guarantee is protected": {
+   "el": [
+    542,
+    201,
+    1100,
+    392
+   ],
+   "card": [
+    542,
+    201,
+    1100,
+    392
+   ]
+  },
+  "Next rent": {
+   "el": [
+    542,
+    617,
+    1100,
+    496
+   ],
+   "card": [
+    542,
+    617,
+    1100,
+    496
+   ]
+  },
+  "Recent activity": {
+   "el": [
+    1005,
+    642,
+    612,
+    49
+   ],
+   "card": [
+    980,
+    617,
+    662,
+    496
+   ]
+  },
+  "What you can do": {
+   "el": [
+    1249,
+    222,
+    372,
+    20
+   ],
+   "card": [
+    1228,
+    201,
+    414,
+    392
+   ]
+  },
+  "Tenant Guardian": {
+   "el": [
+    567,
+    904,
+    364,
+    41
+   ],
+   "card": [
+    542,
+    879,
+    414,
+    235
+   ]
+  }
+ },
+ "lease-landlord": {
+  "Deadlines": {
+   "el": [
+    542,
+    683,
+    1100,
+    414
+   ],
+   "card": [
+    542,
+    683,
+    1100,
+    414
+   ]
+  },
+  "Terms on-chain": {
+   "el": [
+    1129,
+    708,
+    488,
+    27
+   ],
+   "card": [
+    1104,
+    683,
+    538,
+    414
+   ]
+  },
+  "Invest the guarantee": {
+   "el": [
+    542,
+    1121,
+    1100,
+    301
+   ],
+   "card": [
+    542,
+    1121,
+    1100,
+    301
+   ]
+  },
+  "Parties & reputation": {
+   "el": [
+    1129,
+    1146,
+    488,
+    24
+   ],
+   "card": [
+    1104,
+    1121,
+    538,
+    301
+   ]
+  },
+  "Months": {
+   "el": [
+    1129,
+    796,
+    488,
+    46
+   ],
+   "card": [
+    1104,
+    683,
+    538,
+    414
+   ]
+  },
+  "History": {
+   "el": [
+    1129,
+    2086,
+    488,
+    49
+   ],
+   "card": [
+    1104,
+    2061,
+    538,
+    521
+   ]
+  },
+  "On Stellar": {
+   "el": [
+    567,
+    2631,
+    1050,
+    49
+   ],
+   "card": [
+    542,
+    2606,
+    1100,
+    396
+   ]
+  },
+  "Guarantee held for you": {
+   "el": [
+    542,
+    267,
+    1100,
+    393
+   ],
+   "card": [
+    542,
+    267,
+    1100,
+    393
+   ]
+  }
+ },
+ "lease-tenant": {
+  "Deadlines": {
+   "el": [
+    542,
+    683,
+    1100,
+    414
+   ],
+   "card": [
+    542,
+    683,
+    1100,
+    414
+   ]
+  },
+  "Months": {
+   "el": [
+    1129,
+    796,
+    488,
+    46
+   ],
+   "card": [
+    1104,
+    683,
+    538,
+    414
+   ]
+  },
+  "History": {
+   "el": [
+    1129,
+    2085,
+    488,
+    49
+   ],
+   "card": [
+    1104,
+    2060,
+    538,
+    521
+   ]
+  },
+  "Guarantee held for you": null
+ },
+ "lease-disputed-tenant": {
+  "Damage claim": {
+   "el": [
+    567,
+    2089,
+    1050,
+    30
+   ],
+   "card": [
+    542,
+    2064,
+    1100,
+    326
+   ]
+  },
+  "Guarantee held for you": null,
+  "What you can do": {
+   "el": [
+    1253,
+    292,
+    364,
+    20
+   ],
+   "card": [
+    1228,
+    267,
+    414,
+    360
+   ]
+  }
+ },
+ "activity-settled": {
+  "Everything that happened": {
+   "el": [
+    542,
+    130,
+    568,
+    37
+   ],
+   "card": [
+    542,
+    130,
+    568,
+    37
+   ]
+  },
+  "Settled · lease #0": {
+   "el": [
+    571,
+    342,
+    1042,
+    93
+   ],
+   "card": [
+    571,
+    342,
+    1042,
+    93
+   ]
+  },
+  "Guarantee funded · lease #0": {
+   "el": [
+    571,
+    1082,
+    1042,
+    93
+   ],
+   "card": [
+    571,
+    1082,
+    1042,
+    93
+   ]
+  }
+ },
+ "join-terms": {
+  "What you agree to": {
+   "el": [
+    1194,
+    253,
+    448,
+    987
+   ],
+   "card": [
+    1194,
+    253,
+    448,
+    987
+   ]
+  },
+  "Yield option": {
+   "el": [
+    1219,
+    747,
+    398,
+    46
+   ],
+   "card": [
+    1194,
+    253,
+    448,
+    744
+   ]
+  },
+  "Lock 310.00 USDC and accept the Blend yield option": {
+   "el": [
+    1219,
+    1147,
+    398,
+    68
+   ],
+   "card": [
+    1194,
+    1020,
+    448,
+    220
+   ]
+  },
+  "The landlord offered the yield option": {
+   "el": [
+    567,
+    877,
+    578,
+    112
+   ],
+   "card": [
+    542,
+    253,
+    628,
+    987
+   ]
+  },
+  "Tenant Guardian explains": {
+   "el": [
+    542,
+    253,
+    1100,
+    987
+   ],
+   "card": [
+    542,
+    253,
+    1100,
+    987
+   ]
+  }
+ },
+ "assistant-q1": {
+  "When is my next rent due?": {
+   "el": [
+    567,
+    333,
+    726,
+    42
+   ],
+   "card": [
+    542,
+    105,
+    776,
+    928
+   ]
+  },
+  "Lease active: 2 of 3 months settled.": {
+   "el": [
+    567,
+    395,
+    726,
+    485
+   ],
+   "card": [
+    542,
+    105,
+    776,
+    928
+   ]
+  },
+  "Review & sign": {
+   "el": [
+    612,
+    773,
+    518,
+    60
+   ],
+   "card": [
+    542,
+    105,
+    776,
+    928
+   ]
+  }
+ },
+ "assistant-q2": {
+  "When do I get my deposit back?": {
+   "el": [
+    567,
+    333,
+    726,
+    42
+   ],
+   "card": [
+    542,
+    105,
+    776,
+    928
+   ]
+  },
+  "After 3 months, either party ends the lease": null
+ },
+ "assistant-q3": {
+  "What happens if a claim is raised?": {
+   "el": [
+    567,
+    333,
+    726,
+    42
+   ],
+   "card": [
+    542,
+    105,
+    776,
+    928
+   ]
+  },
+  "A damage claim states an amount": {
+   "el": [
+    567,
+    395,
+    726,
+    139
+   ],
+   "card": [
+    542,
+    105,
+    776,
+    928
+   ]
+  }
+ },
+ "assistant-landlord-unpaid": {
+  "Seize the whole guarantee now": {
+   "el": [
+    567,
+    333,
+    726,
+    42
+   ],
+   "card": [
+    542,
+    105,
+    776,
+    928
+   ]
+  },
+  "The guarantee cannot be claimed during the lease": null
+ },
+ "rate-dialog": {
+  "Rate your landlord (1 to 5)": {
+   "el": [
+    1253,
+    323,
+    364,
+    62
+   ],
+   "card": [
+    1228,
+    267,
+    414,
+    360
+   ]
+  }
+ },
+ "fund-yield-dialog": {
+  "Pay with supported crypto": {
+   "el": [
+    0,
+    208,
+    1920,
+    1080
+   ],
+   "card": [
+    0,
+    208,
+    1920,
+    1080
+   ]
+  },
+  "Total escrow funding": {
+   "el": [
+    664,
+    646,
+    592,
+    46
+   ],
+   "card": [
+    640,
+    306,
+    640,
+    884
+   ]
+  }
+ }
+}

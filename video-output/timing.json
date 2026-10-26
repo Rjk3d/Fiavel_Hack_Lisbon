@@ -1,0 +1,387 @@
+{
+  "voice": "af_heart",
+  "speed": 0.9,
+  "scenes": [
+    {
+      "id": "s1-problem",
+      "start": 0.0,
+      "duration": 16.56,
+      "voice": "assets/voice/s1-problem.wav",
+      "voice_start": 0.9,
+      "voice_length": 14.764,
+      "groups": [
+        {
+          "text": "Finding a home should be exciting.",
+          "start": 0.9,
+          "end": 2.841
+        },
+        {
+          "text": "But for tenants and landlords,",
+          "start": 3.391,
+          "end": 5.205
+        },
+        {
+          "text": "a rental deposit can create uncertainty,",
+          "start": 5.385,
+          "end": 8.137
+        },
+        {
+          "text": "mistrust,",
+          "start": 8.317,
+          "end": 9.277
+        },
+        {
+          "text": "and disputes.",
+          "start": 9.457,
+          "end": 10.609
+        },
+        {
+          "text": "Fiável starts with a simple question:",
+          "start": 11.159,
+          "end": 13.356
+        },
+        {
+          "text": "what if the rules were clear",
+          "start": 13.616,
+          "end": 14.612
+        },
+        {
+          "text": "from day one?",
+          "start": 14.612,
+          "end": 15.664
+        }
+      ]
+    },
+    {
+      "id": "s2-reveal",
+      "start": 16.56,
+      "duration": 15,
+      "voice": "assets/voice/s2-reveal.wav",
+      "voice_start": 1.6,
+      "voice_length": 11.287,
+      "groups": [
+        {
+          "text": "Fiável is building",
+          "start": 1.6,
+          "end": 2.433
+        },
+        {
+          "text": "a more transparent way to rent.",
+          "start": 2.433,
+          "end": 4.544
+        },
+        {
+          "text": "It brings lease conditions,",
+          "start": 5.094,
+          "end": 6.737
+        },
+        {
+          "text": "payments,",
+          "start": 6.917,
+          "end": 7.813
+        },
+        {
+          "text": "deposit protection,",
+          "start": 7.993,
+          "end": 9.401
+        },
+        {
+          "text": "and guided actions into one connected experience.",
+          "start": 9.581,
+          "end": 12.887
+        }
+      ]
+    },
+    {
+      "id": "s3-sides",
+      "start": 31.56,
+      "duration": 20,
+      "voice": "assets/voice/s3-sides.wav",
+      "voice_start": 0.8,
+      "voice_length": 12.695,
+      "groups": [
+        {
+          "text": "Both sides can follow the rental journey:",
+          "start": 0.8,
+          "end": 3.211
+        },
+        {
+          "text": "what was agreed,",
+          "start": 3.471,
+          "end": 4.559
+        },
+        {
+          "text": "what has been paid,",
+          "start": 4.739,
+          "end": 5.955
+        },
+        {
+          "text": "what is due,",
+          "start": 6.135,
+          "end": 7.116
+        },
+        {
+          "text": "and what happens when a problem arises.",
+          "start": 7.296,
+          "end": 9.749
+        },
+        {
+          "text": "Less ambiguity.",
+          "start": 10.299,
+          "end": 11.579
+        },
+        {
+          "text": "More accountability.",
+          "start": 12.129,
+          "end": 13.495
+        }
+      ]
+    },
+    {
+      "id": "s4-stellar",
+      "start": 51.56,
+      "duration": 25,
+      "voice": "assets/voice/s4-stellar.wav",
+      "voice_start": 0.8,
+      "voice_length": 20.219,
+      "groups": [
+        {
+          "text": "Underneath Fiável is LeaseVault,",
+          "start": 0.8,
+          "end": 2.827
+        },
+        {
+          "text": "a Soroban smart contract on Stellar Testnet.",
+          "start": 3.007,
+          "end": 5.865
+        },
+        {
+          "text": "It is designed to hold the rental guarantee",
+          "start": 6.415,
+          "end": 9.395
+        },
+        {
+          "text": "and enforce defined rules for payments,",
+          "start": 9.395,
+          "end": 11.898
+        },
+        {
+          "text": "claims,",
+          "start": 12.078,
+          "end": 12.931
+        },
+        {
+          "text": "deadlines,",
+          "start": 13.111,
+          "end": 14.135
+        },
+        {
+          "text": "and releases.",
+          "start": 14.315,
+          "end": 15.467
+        },
+        {
+          "text": "When an action happens on-chain,",
+          "start": 16.017,
+          "end": 17.895
+        },
+        {
+          "text": "its transaction can be independently verified.",
+          "start": 18.075,
+          "end": 21.019
+        }
+      ]
+    },
+    {
+      "id": "s5-agents",
+      "start": 76.56,
+      "duration": 20,
+      "voice": "assets/voice/s5-agents.wav",
+      "voice_start": 0.8,
+      "voice_length": 14.439,
+      "groups": [
+        {
+          "text": "Fiável's agents help tenants",
+          "start": 0.8,
+          "end": 2.583
+        },
+        {
+          "text": "and landlords understand their lease,",
+          "start": 2.583,
+          "end": 4.661
+        },
+        {
+          "text": "review deadlines,",
+          "start": 4.841,
+          "end": 6.079
+        },
+        {
+          "text": "and prepare their next steps.",
+          "start": 6.259,
+          "end": 7.859
+        },
+        {
+          "text": "They explain the available rules;",
+          "start": 8.409,
+          "end": 10.371
+        },
+        {
+          "text": "they do not replace the contract",
+          "start": 10.631,
+          "end": 12.7
+        },
+        {
+          "text": "or take control away from the people involved.",
+          "start": 12.7,
+          "end": 15.239
+        }
+      ]
+    },
+    {
+      "id": "s6-blend",
+      "start": 96.56,
+      "duration": 16.5,
+      "voice": "assets/voice/s6-blend.wav",
+      "voice_start": 0.8,
+      "voice_length": 12.951,
+      "groups": [
+        {
+          "text": "Where supported,",
+          "start": 0.8,
+          "end": 1.909
+        },
+        {
+          "text": "Fiável explores putting eligible deposit funds",
+          "start": 2.089,
+          "end": 5.464
+        },
+        {
+          "text": "to work through Blend,",
+          "start": 5.464,
+          "end": 6.591
+        },
+        {
+          "text": "with explicit consent and clear limits.",
+          "start": 6.771,
+          "end": 9.245
+        },
+        {
+          "text": "Investment involves risk,",
+          "start": 9.795,
+          "end": 11.481
+        },
+        {
+          "text": "and returns are never guaranteed.",
+          "start": 11.661,
+          "end": 13.751
+        }
+      ]
+    },
+    {
+      "id": "s7-reputation",
+      "start": 113.06,
+      "duration": 15,
+      "voice": "assets/voice/s7-reputation.wav",
+      "voice_start": 0.8,
+      "voice_length": 12.686,
+      "groups": [
+        {
+          "text": "Trust grows through accountable behavior.",
+          "start": 0.8,
+          "end": 3.061
+        },
+        {
+          "text": "Fiável is also exploring rental reputation,",
+          "start": 3.611,
+          "end": 6.705
+        },
+        {
+          "text": "so both sides can make",
+          "start": 6.885,
+          "end": 8.276
+        },
+        {
+          "text": "better-informed decisions using transparent,",
+          "start": 8.276,
+          "end": 11.258
+        },
+        {
+          "text": "appropriately verified history.",
+          "start": 11.438,
+          "end": 13.486
+        }
+      ]
+    },
+    {
+      "id": "s8-montage",
+      "start": 128.06,
+      "duration": 18,
+      "voice": "assets/voice/s8-montage.wav",
+      "voice_start": 0.6,
+      "voice_length": 12.773,
+      "groups": [
+        {
+          "text": "By combining rental-focused smart contracts,",
+          "start": 0.6,
+          "end": 3.245
+        },
+        {
+          "text": "Stellar payments,",
+          "start": 3.425,
+          "end": 4.62
+        },
+        {
+          "text": "guided agents,",
+          "start": 4.8,
+          "end": 5.973
+        },
+        {
+          "text": "and a transparent user experience,",
+          "start": 6.153,
+          "end": 8.201
+        },
+        {
+          "text": "Fiável brings blockchain technology to",
+          "start": 8.381,
+          "end": 10.897
+        },
+        {
+          "text": "a problem people actually understand.",
+          "start": 10.897,
+          "end": 13.373
+        }
+      ]
+    },
+    {
+      "id": "s9-end",
+      "start": 146.06,
+      "duration": 12,
+      "voice": "assets/voice/s9-end.wav",
+      "voice_start": 1.2,
+      "voice_length": 5.653,
+      "groups": [
+        {
+          "text": "Fiável.",
+          "start": 1.2,
+          "end": 2.075
+        },
+        {
+          "text": "Fair rentals,",
+          "start": 2.625,
+          "end": 3.777
+        },
+        {
+          "text": "built on trust.",
+          "start": 3.957,
+          "end": 5.151
+        },
+        {
+          "text": "Built on Stellar.",
+          "start": 5.701,
+          "end": 6.853
+        }
+      ]
+    }
+  ],
+  "total": 158.06
+}

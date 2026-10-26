@@ -1,0 +1,63 @@
+{
+  "voice": "af_heart",
+  "speed": 0.9,
+  "pronunciations": {
+    "Fiável": "fiˈɑːvɛl"
+  },
+  "scenes": [
+    {
+      "id": "s1-problem",
+      "min": 15,
+      "lead": 0.9,
+      "text": "Finding a home should be exciting. But for tenants and landlords, a rental deposit can create uncertainty, mistrust, and disputes. Fiável starts with a simple question: what if the rules were clear from day one?"
+    },
+    {
+      "id": "s2-reveal",
+      "min": 15,
+      "lead": 1.6,
+      "text": "Fiável is building a more transparent way to rent. It brings lease conditions, payments, deposit protection, and guided actions into one connected experience."
+    },
+    {
+      "id": "s3-sides",
+      "min": 20,
+      "lead": 0.8,
+      "text": "Both sides can follow the rental journey: what was agreed, what has been paid, what is due, and what happens when a problem arises. Less ambiguity. More accountability."
+    },
+    {
+      "id": "s4-stellar",
+      "min": 25,
+      "lead": 0.8,
+      "text": "Underneath Fiável is LeaseVault, a Soroban smart contract on Stellar Testnet. It is designed to hold the rental guarantee and enforce defined rules for payments, claims, deadlines, and releases. When an action happens on-chain, its transaction can be independently verified."
+    },
+    {
+      "id": "s5-agents",
+      "min": 20,
+      "lead": 0.8,
+      "text": "Fiável's agents help tenants and landlords understand their lease, review deadlines, and prepare their next steps. They explain the available rules; they do not replace the contract or take control away from the people involved."
+    },
+    {
+      "id": "s6-blend",
+      "min": 16.5,
+      "lead": 0.8,
+      "text": "Where supported, Fiável explores putting eligible deposit funds to work through Blend, with explicit consent and clear limits. Investment involves risk, and returns are never guaranteed."
+    },
+    {
+      "id": "s7-reputation",
+      "min": 15,
+      "lead": 0.8,
+      "text": "Trust grows through accountable behavior. Fiável is also exploring rental reputation, so both sides can make better-informed decisions using transparent, appropriately verified history."
+    },
+    {
+      "id": "s8-montage",
+      "min": 18,
+      "lead": 0.6,
+      "text": "By combining rental-focused smart contracts, Stellar payments, guided agents, and a transparent user experience, Fiável brings blockchain technology to a problem people actually understand."
+    },
+    {
+      "id": "s9-end",
+      "min": 12,
+      "lead": 1.2,
+      "text": "Fiável. Fair rentals, built on trust. Built on Stellar."
+    }
+  ]
+}

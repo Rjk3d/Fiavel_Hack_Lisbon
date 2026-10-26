@@ -1,0 +1,108 @@
+<template>
+  <style>
+    #root { position: absolute; inset: 0; overflow: hidden; background: #faf9fd; font-family: Inter, sans-serif; color: #171329; }
+    .win { position: absolute; overflow: hidden; border-radius: 24px; background: #faf9fd;
+      box-shadow: 0 2px 4px rgba(23,19,41,.05), 0 30px 60px -24px rgba(23,19,41,.28); }
+    .cam { position: absolute; left: 0; top: 0; width: 1920px; }
+    .cam img { display: block; width: 1920px; }
+    .who { position: absolute; top: 132px; opacity: 0; font-size: 30px; font-weight: 700; letter-spacing: -0.01em; }
+    .who span { color: #777487; font-weight: 500; }
+    .src { position: absolute; left: 248px; top: 840px; font-size: 28px; letter-spacing: -0.01em; color: #4a4560; }
+    .ring { position: absolute; border: 3px solid #9b72e8; border-radius: 28px; opacity: 0; box-shadow: 0 0 0 4000px rgba(23, 19, 41, 0.45); }
+    .src b { color: #6338b8; font-weight: 700; }
+  </style>
+  <div id="root" data-composition-id="s3-sides" data-width="1920" data-height="1080">
+    <div id="s3-who-t" class="who" style="left: 80px">Ana Costa <span>· tenant view</span></div>
+    <div id="s3-who-l" class="who" style="left: 980px">Manuel Ferreira <span>· landlord view</span></div>
+
+    <div id="s3-left" class="win" style="left: 248px; top: 60px; width: 1425px; height: 770px">
+      <div id="s3-left-cam" class="cam"><img src="assets/screens/overview-tenant.png" alt="Overview, tenant" /></div>
+    </div>
+    <div id="s3-right" class="win" style="left: 248px; top: 60px; width: 1425px; height: 770px; opacity: 0">
+      <div id="s3-right-cam" class="cam"><img src="assets/screens/overview-landlord.png" alt="Overview, landlord" /></div>
+    </div>
+
+    <!-- The lease itself, landlord side, then the same lease at its damage-claim step, then its record. -->
+    <div id="s3-detail" class="win" style="left: 248px; top: 60px; width: 1425px; height: 770px; opacity: 0">
+      <div id="s3-cam-lease" class="cam"><img src="assets/screens/lease-landlord.png" alt="Lease page, landlord" />
+        <div id="s3-r-terms" class="ring" style="left: 1098px; top: 677px; width: 550px; height: 426px"></div>
+        <div id="s3-r-months" class="ring" style="left: 536px; top: 2054px; width: 550px; height: 242px"></div>
+        <div id="s3-r-due" class="ring" style="left: 536px; top: 677px; width: 550px; height: 426px"></div>
+      </div>
+      <div id="s3-cam-claim" class="cam" style="opacity: 0"><img src="assets/screens/lease-disputed-tenant.png" alt="Lease page at the damage claim, tenant" />
+        <div id="s3-r-claim" class="ring" style="left: 548px; top: 2118px; width: 1088px; height: 90px; border-radius: 16px"></div>
+      </div>
+      <div id="s3-cam-act" class="cam" style="opacity: 0"><img src="assets/screens/activity-settled.png" alt="Activity: every contract event of lease #0" /></div>
+    </div>
+
+    <div id="s3-src-a" class="src"><b>Real app</b> · the same replayed lease, seen by each party · demo mode: 1 month = 1 minute</div>
+    <div id="s3-src-b" class="src" style="opacity: 0"><b>Real app</b> · same lease, damage-claim step</div>
+    <div id="s3-src-c" class="src" style="opacity: 0"><b>Real app</b> · Activity, rebuilt from LeaseVault's contract events, each linked to its transaction</div>
+  </div>
+  <script>
+    (() => {
+      const id = "s3-sides";
+      const cue = (t, e) => window.filmCue(id, t, e);
+      const tl = gsap.timeline({ paused: true });
+      // Show screenshot region r = [x, y, w, h] (screenshot px) in a window of width W.
+      const frame = (r, W) => { const s = W / r[2]; return { scale: s, x: -r[0] * s, y: -r[1] * s }; };
+      const OV = [520, 160, 1140, 640];
+
+      // Every window is the full 1425 x 800 stage; smaller layouts are a scale of it.
+      const SMALL = 860 / 1425;
+      const at = (left, top) => ({ transformOrigin: "0 0", scale: SMALL, x: left - 248, y: top - 60 });
+      gsap.set(["#s3-left-cam", "#s3-right-cam"], { transformOrigin: "0 0", ...frame(OV, 1425) });
+      gsap.set("#s3-left", { transformOrigin: "0 0", scale: 1, x: 0, y: 0 });
+
+      // Start where S2 ended, then split into the two parties' views.
+      const split = 0.35;
+      tl.to("#s3-left", { ...at(80, 190), duration: 0.6, ease: "power3.inOut" }, split);
+      tl.fromTo("#s3-right", { ...at(1100, 190), opacity: 0 }, { ...at(980, 190), opacity: 1, duration: 0.55, ease: "power3.out" }, split + 0.2);
+      tl.fromTo(["#s3-who-t", "#s3-who-l"], { opacity: 0, filter: "blur(6px)" }, { opacity: 1, filter: "blur(0px)", duration: 0.2, stagger: 0.15 }, split + 0.5);
+
+      // "what was agreed": the landlord's side opens into the lease page: on-chain terms and deadlines.
+      const open = cue("what was agreed") - 0.3;
+      const LEASE = (r) => frame(r, 1425);
+      // ~1.9x punch-ins so app text stays above 26 px; the spotlight dims what the frame crops.
+      const TERMS = [998, 672, 750, 421], PAID = [436, 1965, 750, 421], DUE = [436, 672, 750, 421];
+      gsap.set("#s3-cam-lease", { transformOrigin: "0 0", ...LEASE(TERMS) });
+      gsap.set("#s3-detail", { ...at(980, 190) });
+      tl.set("#s3-detail", { opacity: 1 }, open);
+      tl.to("#s3-right", { opacity: 0, duration: 0.15 }, open);
+      tl.to("#s3-detail", { scale: 1, x: 0, y: 0, duration: 0.6, ease: "power3.inOut" }, open);
+      tl.to(["#s3-left", "#s3-who-t", "#s3-who-l"], { opacity: 0, filter: "blur(10px)", duration: 0.3, ease: "power2.in" }, open);
+
+      // One spotlight per line of the voice: agreed, paid, due.
+      const spot = (sel, on, off) => {
+        tl.fromTo(sel, { opacity: 0 }, { opacity: 1, duration: 0.22, ease: "power2.out" }, on);
+        tl.to(sel, { opacity: 0, duration: 0.15, ease: "power2.in" }, off);
+      };
+      spot("#s3-r-terms", open + 0.55, cue("what has been paid") - 0.15);
+      tl.to("#s3-cam-lease", { ...LEASE(PAID), duration: 0.55, ease: "power2.inOut" }, cue("what has been paid") - 0.15);
+      spot("#s3-r-months", cue("what has been paid") + 0.35, cue("what is due") - 0.15);
+      tl.to("#s3-cam-lease", { ...LEASE(DUE), duration: 0.55, ease: "power2.inOut" }, cue("what is due") - 0.15);
+      spot("#s3-r-due", cue("what is due") + 0.35, cue("and what happens") + 0.4);
+
+      // "...when a problem arises": blur swap to the same lease at its damage claim.
+      const claim = cue("and what happens") + 0.2;
+      gsap.set("#s3-cam-claim", { transformOrigin: "0 0", ...LEASE([530, 1940, 1124, 632]) });
+      tl.to("#s3-cam-lease", { opacity: 0, filter: "blur(8px)", duration: 0.18, ease: "power2.in" }, claim);
+      tl.fromTo("#s3-cam-claim", { opacity: 0, filter: "blur(8px)" }, { opacity: 1, filter: "blur(0px)", duration: 0.18, ease: "power2.out" }, claim + 0.12);
+      tl.to("#s3-cam-claim", { ...LEASE([530, 1980, 1124, 632]), duration: 1.4, ease: "power2.inOut" }, claim + 0.3);
+      spot("#s3-r-claim", claim + 1.0, cue("Less ambiguity") - 0.3);
+      tl.to("#s3-src-a", { opacity: 0, duration: 0.15 }, claim);
+      tl.to("#s3-src-b", { opacity: 1, duration: 0.2 }, claim + 0.15);
+
+      // "Less ambiguity. More accountability.": the whole record, every step with its transaction.
+      const rec = cue("Less ambiguity") - 0.2;
+      gsap.set("#s3-cam-act", { transformOrigin: "0 0", ...LEASE([548, 330, 840, 472]) });
+      tl.to("#s3-cam-claim", { opacity: 0, filter: "blur(8px)", duration: 0.18, ease: "power2.in" }, rec);
+      tl.fromTo("#s3-cam-act", { opacity: 0, filter: "blur(8px)" }, { opacity: 1, filter: "blur(0px)", duration: 0.18, ease: "power2.out" }, rec + 0.12);
+      tl.to("#s3-cam-act", { ...LEASE([548, 860, 840, 472]), duration: 7, ease: "power1.inOut" }, rec + 0.8);
+      tl.to("#s3-src-b", { opacity: 0, duration: 0.15 }, rec);
+      tl.to("#s3-src-c", { opacity: 1, duration: 0.2 }, rec + 0.15);
+
+      window.__timelines[id] = tl;
+    })();
+  </script>
+</template>

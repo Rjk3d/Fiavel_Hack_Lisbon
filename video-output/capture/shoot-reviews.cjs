@@ -1,0 +1,23 @@
+// Screenshots of the separate frontend/ reputation demo (fictional data, local SQLite API).
+// Run with `npm run dev` in frontend/ (DEV_PORT=5182).
+const { chromium } = require('playwright')
+const path = require('node:path')
+const OUT = path.join(__dirname, '..', 'assets', 'screens')
+;(async () => {
+  const b = await chromium.launch()
+  const ctx = await b.newContext({ viewport: { width: 1920, height: 1080 }, deviceScaleFactor: 2 })
+  const p = await ctx.newPage()
+  p.on('pageerror', (e) => console.log('ERR', e.message))
+  await p.goto('http://127.0.0.1:5182/app/reviews')
+  await p.waitForTimeout(3000)
+  await p.screenshot({ path: path.join(OUT, 'reviews-entry.png'), fullPage: true })
+  await p.getByRole('button', { name: 'Explore review demo' }).click()
+  await p.waitForTimeout(2500)
+  await p.screenshot({ path: path.join(OUT, 'reviews-demo.png'), fullPage: true })
+  await p.getByRole('button', { name: 'Write review' }).click()
+  await p.waitForTimeout(1500)
+  await p.screenshot({ path: path.join(OUT, 'reviews-write.png') })
+  const names = await p.$$eval('button, a', (els) => els.map((e) => e.textContent.trim().slice(0, 60)).filter(Boolean))
+  console.log(JSON.stringify(names))
+  await b.close()
+})()

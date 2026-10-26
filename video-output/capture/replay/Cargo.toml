@@ -1,0 +1,14 @@
+# Replays the steps of LeaseVault v5 lease #0 (README, "On-chain evidence") on the
+# real contract code in the Soroban host, and exports every state as XDR, the format
+# the RPC returns. The film's app shots read these states instead of the network.
+[package]
+name = "fiavel_film_replay"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[workspace]
+
+[dependencies]
+lease_vault = { path = "../../../contracts/lease_vault" }
+soroban-sdk = { version = "27", features = ["testutils"] }
