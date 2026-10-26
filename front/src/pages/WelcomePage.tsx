@@ -9,7 +9,7 @@ import { useAuth } from '../state/auth'
 const MAX_ATTEMPTS = 5
 const LOCK_SECONDS = 30
 
-/** Entry screen: optional team sign-in, or continue as a guest. */
+/** Entry screen: continue as a guest (first, for judges and visitors), or the optional team sign-in. */
 export function WelcomePage() {
   const { session, signIn, continueAsGuest } = useAuth()
   const navigate = useNavigate()
@@ -65,13 +65,41 @@ export function WelcomePage() {
             Stellar Testnet
           </Pill>
         </div>
-        <div className="grid gap-5 md:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)]">
+        <div className="grid gap-5 md:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)]">
+          <section className="brand-surface flex flex-col rounded-xl3 p-6 text-white shadow-brand sm:p-8">
+            <span className="grid h-11 w-11 place-items-center rounded-2xl bg-white/15">
+              <UserRound size={20} />
+            </span>
+            <p className="mt-5 text-[11px] font-semibold uppercase tracking-[0.14em] text-white/70">No account needed</p>
+            <h1 className="mt-2 text-[28px] font-semibold leading-[1.1] tracking-[-0.025em]">Continue as a guest</h1>
+            <p className="mt-2 text-[14px] leading-[21px] text-white/75">
+              The full app on Stellar Testnet: three test wallets (tenant, landlord, mediator) are created in your browser. Test assets only, no real money.
+            </p>
+            <ul className="mt-5 space-y-2 text-[14px] text-white/85">
+              {['Real contract calls, with Stellar Expert links', 'Ratings and investments recorded on-chain', 'Nothing to install'].map((t) => (
+                <li key={t} className="flex items-center gap-2">
+                  <ShieldCheck size={16} className="shrink-0 text-[#D9C9FA]" /> {t}
+                </li>
+              ))}
+            </ul>
+            <div className="flex-1" />
+            <button
+              onClick={() => {
+                continueAsGuest()
+                navigate(from, { replace: true })
+              }}
+              className="mt-8 inline-flex h-[52px] items-center justify-center gap-2 rounded-full bg-white px-7 text-[16px] font-semibold text-brand transition hover:bg-brand-tint"
+            >
+              Enter the app <ArrowRight size={18} />
+            </button>
+          </section>
+
           <section className="card p-6 sm:p-8">
             <span className="grid h-11 w-11 place-items-center rounded-2xl bg-brand-tint text-brand">
               <LockKeyhole size={20} />
             </span>
             <p className="eyebrow mt-5">Team access</p>
-            <h1 className="mt-2 text-[28px] font-semibold leading-[1.1] tracking-[-0.025em]">Sign in</h1>
+            <h2 className="mt-2 text-[28px] font-semibold leading-[1.1] tracking-[-0.025em]">Sign in</h2>
             <p className="mt-2 text-[14px] leading-[21px] text-ink-muted">For the Fiável team: unlocks the demo tools (fund every wallet in one click).</p>
             <form onSubmit={submit} noValidate className="mt-6 space-y-4">
               <label className="block">
@@ -116,34 +144,6 @@ export function WelcomePage() {
                 {busy ? 'Checking…' : 'Sign in'}
               </Button>
             </form>
-          </section>
-
-          <section className="brand-surface flex flex-col rounded-xl3 p-6 text-white shadow-brand sm:p-8">
-            <span className="grid h-11 w-11 place-items-center rounded-2xl bg-white/15">
-              <UserRound size={20} />
-            </span>
-            <p className="mt-5 text-[11px] font-semibold uppercase tracking-[0.14em] text-white/70">No account needed</p>
-            <h2 className="mt-2 text-[28px] font-semibold leading-[1.1] tracking-[-0.025em]">Continue as a guest</h2>
-            <p className="mt-2 text-[14px] leading-[21px] text-white/75">
-              The full app on Stellar Testnet: three test wallets (tenant, landlord, mediator) are created in your browser. Test assets only, no real money.
-            </p>
-            <ul className="mt-5 space-y-2 text-[14px] text-white/85">
-              {['Real contract calls, with Stellar Expert links', 'Ratings and investments recorded on-chain', 'Nothing to install'].map((t) => (
-                <li key={t} className="flex items-center gap-2">
-                  <ShieldCheck size={16} className="shrink-0 text-[#D9C9FA]" /> {t}
-                </li>
-              ))}
-            </ul>
-            <div className="flex-1" />
-            <button
-              onClick={() => {
-                continueAsGuest()
-                navigate(from, { replace: true })
-              }}
-              className="mt-8 inline-flex h-[52px] items-center justify-center gap-2 rounded-full bg-white px-7 text-[16px] font-semibold text-brand transition hover:bg-brand-tint"
-            >
-              Enter the app <ArrowRight size={18} />
-            </button>
           </section>
         </div>
       </div>
