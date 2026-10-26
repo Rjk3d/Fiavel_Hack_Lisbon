@@ -8,26 +8,24 @@ Rental escrow for tenants and landlords in Lisbon: the guarantee is held by a So
 transparent rules, deterministic agents explain and prepare every action, and nothing moves without a signature.
 Built for HackMeridian.
 
-## Run the current rental reputation demo
+## Try it
 
-From `frontend/`, run `npm.cmd ci` and `npm.cmd run dev` (use `npm` on shells without PowerShell's script restriction). Open the exact `/app/reviews` URL printed in the terminal. This starts both the frontend and the persistent fictional review API.
+**Live app: https://fiavel-hack-lisbon.vercel.app/app** (Stellar Testnet, nothing to install)
 
-See [the review walkthrough](frontend/REVIEWS.md) and [the rescue audit](frontend/REPUTATION_RESCUE_AUDIT.md). Run `npm.cmd run test:e2e` for the Chrome browser tests. Live rental verification remains disabled until trusted authentication and completed-lease evidence are connected.
+1. On the welcome screen, choose **Continue as a guest** → **Enter the app**. The app creates three testnet wallets in your browser (tenant, landlord, arbiter).
+2. Click **Get test funds** for each role (Friendbot XLM and Blend test USDC).
+3. Switch to **Landlord** → **New lease** (demo mode: 1 month = 1 minute), copy the invite link, switch to **Tenant** and open it.
+4. Lock the guarantee (with the Blend yield option), confirm move-in from both roles, then pay rent, skip a month, end the lease and release or dispute.
 
-This additional `frontend/` demo does not replace the existing `front/` application or its on-chain ratings. See [the integration and preservation report](docs/REPUTATION_INTEGRATION.md) for the branch architecture and verification scope.
+Every action is a real signed testnet transaction, with a toast linking to Stellar Expert. The full walkthrough is in [Demo](#demo), the on-chain proof in [On-chain evidence](#on-chain-evidence-testnet).
 
-## Branches
-
-| Branch | Content |
-|---|---|
-| `main` | Contract, agents and the web app connected to Stellar Testnet. Everything to judge is here |
-| `frontend-yacin` | Source branch of the reputation demo (`frontend/`), now included in `main`; `front/` remains the existing connected application |
+**What to judge:** the contract in `contracts/lease_vault/`, the app in `front/` (the one deployed above) and the agents in `agents/`.
 
 ## Repository layout
 
 | Path | Content |
 |---|---|
-| `front/` | Web app (React + Vite + Tailwind), connected live to LeaseVault on testnet. See [`front/README.md`](front/README.md) |
+| `front/` | **The web app**, deployed above (React + Vite + Tailwind), connected live to LeaseVault on testnet. See [`front/README.md`](front/README.md) |
 | `contracts/lease_vault/` | **LeaseVault**, the Soroban contract (Rust), with its unit tests and a mock Blend pool |
 | `contracts/hello_world/` | Pre-hack toolchain check |
 | `packages/lease-vault-client/` | TypeScript client generated from the contract (`stellar contract bindings typescript`), for the front and the agents |
@@ -35,6 +33,7 @@ This additional `frontend/` demo does not replace the existing `front/` applicat
 | `deployments/` | Contract IDs and accounts per network, and the transaction links of the last demo run |
 | `scripts/` | `deploy-testnet.sh` (accounts, test assets, deploy), `cargo.cmd` (Windows helper) |
 | `docs/PLAN.md` | Feature plan and checkpoints |
+| `frontend/` | Experimental off-chain review prototype with fictional data, not connected to Stellar. See [below](#experimental-off-chain-reviews-frontend) |
 
 ## Problem
 
@@ -170,7 +169,7 @@ The web app's AI language help (translate, polish, summarize in the chat) needs 
 
 ## Demo
 
-- **Public app:** _URL to add after the Vercel deployment_ (root directory `front`, no environment variable needed)
+- **Public app:** https://fiavel-hack-lisbon.vercel.app/app (Vercel, root directory `front`, no environment variable needed)
 - **Video (2–4 min):** _link to add_
 
 The public demo runs without an Anthropic API key: the two optional AI helpers (chat language help, photo inventory analysis) show that they are off, and everything else works, including the agents, which never used a language model.
@@ -317,6 +316,13 @@ Most deposit disputes are "it was already there" against "it was not". Fiável m
 - Testnet resets every quarter: `scripts/deploy-testnet.sh` recreates everything.
 - Testnet storage rent is currently very high (extending an entry to 120 days cost ~50k XLM), so LeaseVault keeps entries at the 7-day network minimum and every call on a lease extends it. A mainnet build would extend for longer.
 - Over a 5-minute demo the real Blend yield is a few stroops; the app shows the real balance and a projection, never a simulated yield.
+
+## Experimental: off-chain reviews (`frontend/`)
+
+A separate prototype (React 19, fictional data, local review API) explores written reviews of tenants and landlords. It is **not**
+connected to Stellar and not part of the deployed app; the on-chain ratings and reputation judged here are in LeaseVault
+(`rate`, `get_reputation`) and shown in `front/`. Run it from `frontend/` with `npm ci && npm run dev`, then open the `/app/reviews`
+URL printed in the terminal. See [the review walkthrough](frontend/REVIEWS.md) and [the integration report](docs/REPUTATION_INTEGRATION.md).
 
 ## Prior work disclosure
 
