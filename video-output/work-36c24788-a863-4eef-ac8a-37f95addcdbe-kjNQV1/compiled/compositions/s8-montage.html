@@ -1,0 +1,81 @@
+<template>
+  <style>
+    #root { position: absolute; inset: 0; overflow: hidden; background: #faf9fd; font-family: Inter, sans-serif; color: #171329; }
+    .win { position: absolute; overflow: hidden; border-radius: 24px; background: #faf9fd;
+      box-shadow: 0 2px 4px rgba(23,19,41,.05), 0 30px 60px -24px rgba(23,19,41,.28); }
+    .cam { position: absolute; left: 0; top: 0; width: 1920px; opacity: 0; }
+    .cam img { display: block; width: 1920px; }
+    .word { position: absolute; left: 150px; top: 400px; width: 640px; font-size: 92px; line-height: 1.02; font-weight: 700; letter-spacing: -0.035em; opacity: 0; }
+    .word b { color: #6338b8; font-weight: 700; }
+    .src { position: absolute; left: 248px; top: 840px; font-size: 28px; letter-spacing: -0.01em; color: #4a4560; opacity: 0; }
+    .src b { color: #6338b8; font-weight: 700; }
+  </style>
+  <div data-hf-id="hf-gpik" id="root" data-composition-id="s8-montage" data-width="1920" data-height="1080">
+    <div data-hf-id="hf-jzlm" id="s8-w1" class="word">Transparent <b data-hf-id="hf-esiy">rules.</b></div>
+    <div data-hf-id="hf-1cea" id="s8-w2" class="word">Verifiable <b data-hf-id="hf-18cm">activity.</b></div>
+    <div data-hf-id="hf-2isi" id="s8-w3" class="word">Guided <b data-hf-id="hf-xf16">decisions.</b></div>
+    <div data-hf-id="hf-d7bm" id="s8-w4" class="word">Both sides <b data-hf-id="hf-udn6">matter.</b></div>
+
+    <!-- A full-stage window masked to its right part (793 x 740); the mask opens for the closing shot. -->
+    <div data-hf-id="hf-p3fk" id="s8-win" class="win" style="left: 248px; top: 60px; width: 1425px; height: 770px; clip-path: inset(6.49% 0% 1.3% 44.35% round 24px)">
+      <div data-hf-id="hf-mj4o" id="s8-a" class="cam"><img data-hf-id="hf-8j4j" src="assets/screens/join-terms.png" alt="Terms both parties read" /></div>
+      <div data-hf-id="hf-v70j" id="s8-b" class="cam"><img data-hf-id="hf-rtgj" src="assets/screens/overview-tenant.png" alt="Guarantee lifecycle" /></div>
+      <div data-hf-id="hf-r8wi" id="s8-c" class="cam"><img data-hf-id="hf-vfgu" src="assets/screens/activity-settled.png" alt="Contract events with transactions" /></div>
+      <div data-hf-id="hf-8h6t" id="s8-d" class="cam"><img data-hf-id="hf-mjeb" src="assets/screens/assistant-q1.png" alt="Tenant Guardian answer" /></div>
+      <div data-hf-id="hf-il0n" id="s8-f" class="cam"><img data-hf-id="hf-7h1y" src="assets/screens/overview-landlord.png" alt="Landlord overview" /></div>
+    </div>
+    <div data-hf-id="hf-sd9o" id="s8-src" class="src"><b data-hf-id="hf-9dtu">Real app</b> · front/ replaying LeaseVault v5 lease #0 · demo mode: 1 month = 1 minute</div>
+  </div>
+  <script>
+    (() => {
+      const id = "s8-montage";
+      const cue = (t, e) => window.filmCue(id, t, e);
+      const D = window.FILM_CUES[id].duration;
+      const tl = gsap.timeline({ paused: true });
+      // Region r (screenshot px) shown in the visible box [left, top, width] of the window.
+      const BOX = [632, 50, 793];
+      const frame = (r, box = BOX) => { const s = box[2] / r[2]; return { scale: s, x: box[0] - r[0] * s, y: box[1] - r[1] * s }; };
+      // [layer, region]: the join page and the tenant overview are each used twice, re-framed.
+      const shots = {
+        a: ["a", [1180, 240, 480, 448]], b: ["b", [530, 190, 690, 644]], c: ["c", [548, 330, 640, 597]], d: ["d", [580, 380, 600, 560]],
+        e: ["a", [1170, 980, 500, 467]], f: ["f", [520, 160, 700, 653]], g: ["b", [520, 160, 793, 740]],
+      };
+      ["a", "b", "c", "d", "f"].forEach((k) => gsap.set(`#s8-${k}`, { transformOrigin: "0 0", ...frame(shots[k][1]) }));
+
+      // Hard cuts inside the window; each shot drifts 4 % while it holds.
+      const cuts = [
+        ["a", 0.0], ["b", cue("By combining") + 1.4], ["c", cue("Stellar payments") - 0.05], ["d", cue("guided agents") - 0.05],
+        ["e", cue("and a transparent") - 0.05], ["f", cue("and a transparent") + 1.0], ["g", cue("Fiável brings") - 0.3],
+      ];
+      cuts.forEach(([k, t], i) => {
+        const [layer, r] = shots[k];
+        const end = i + 1 < cuts.length ? cuts[i + 1][1] : D;
+        tl.set(`#s8-${layer}`, { opacity: 1, ...frame(r) }, t);
+        if (k !== "g") {
+          const [x, y, w, h] = r;
+          tl.to(`#s8-${layer}`, { ...frame([x + w * 0.02, y + h * 0.02, w * 0.96, h * 0.96]), duration: end - t, ease: "none" }, t);
+          tl.set(`#s8-${layer}`, { opacity: 0 }, end);
+        }
+      });
+      tl.fromTo("#s8-win", { opacity: 0 }, { opacity: 1, duration: 0.3, ease: "power2.out" }, 0.0);
+
+      // One word at a time, each landing on the thing the voice names, then held still.
+      const words = [["#s8-w1", cue("By combining") + 0.2], ["#s8-w2", cue("Stellar payments")], ["#s8-w3", cue("guided agents")], ["#s8-w4", cue("and a transparent")]];
+      words.forEach(([w, t], i) => {
+        tl.fromTo(w, { opacity: 0, filter: "blur(8px)" }, { opacity: 1, filter: "blur(0px)", duration: 0.16, ease: "power2.out" }, t);
+        const out = i + 1 < words.length ? words[i + 1][1] - 0.12 : cue("Fiável brings") - 0.35;
+        tl.to(w, { opacity: 0, filter: "blur(8px)", duration: 0.12, ease: "power2.in" }, out);
+      });
+
+      // "Fiável brings blockchain technology to a problem people actually understand": the window opens to the
+      // full stage on the cleanest real screen, and holds.
+      const open = cue("Fiável brings") - 0.3;
+      tl.to("#s8-win", { clipPath: "inset(0% 0% 0% 0% round 24px)", duration: 0.7, ease: "power3.inOut" }, open);
+      tl.to("#s8-b", { ...frame([520, 160, 1140, 640], [0, 0, 1425]), duration: 0.7, ease: "power3.inOut" }, open);
+      tl.to("#s8-b", { ...frame([540, 170, 1100, 618], [0, 0, 1425]), duration: D - open - 0.8, ease: "power1.inOut" }, open + 0.75);
+      tl.fromTo("#s8-src", { opacity: 0 }, { opacity: 1, duration: 0.3 }, open + 0.7);
+
+      window.__timelines[id] = tl;
+    })();
+  </script>
+</template>

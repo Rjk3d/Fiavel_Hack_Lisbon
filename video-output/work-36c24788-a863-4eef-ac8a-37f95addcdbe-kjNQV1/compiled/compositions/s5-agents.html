@@ -1,0 +1,71 @@
+<template>
+  <style>
+    #root { position: absolute; inset: 0; overflow: hidden; background: #faf9fd; font-family: Inter, sans-serif; color: #171329; }
+    .win { position: absolute; overflow: hidden; border-radius: 24px; background: #faf9fd;
+      box-shadow: 0 2px 4px rgba(23,19,41,.05), 0 30px 60px -24px rgba(23,19,41,.28); }
+    .cam { position: absolute; left: 0; top: 0; width: 1920px; }
+    .cam img { display: block; width: 1920px; }
+    .ring { position: absolute; border: 3px solid #9b72e8; border-radius: 22px; opacity: 0; box-shadow: 0 0 0 4000px rgba(23, 19, 41, 0.42); }
+    .src { position: absolute; left: 248px; top: 840px; font-size: 28px; letter-spacing: -0.01em; color: #4a4560; }
+    .src b { color: #6338b8; font-weight: 700; }
+  </style>
+  <div data-hf-id="hf-4j7k" id="root" data-composition-id="s5-agents" data-width="1920" data-height="1080">
+    <div data-hf-id="hf-6trt" id="s5-win" class="win" style="left: 248px; top: 60px; width: 1425px; height: 770px">
+      <div data-hf-id="hf-lkyc" id="s5-cam-q1" class="cam"><img data-hf-id="hf-u33k" src="assets/screens/assistant-q1.png" alt="Tenant Guardian: When is my next rent due?" />
+        <div data-hf-id="hf-gtqv" id="s5-r-sign" class="ring" style="left: 604px; top: 700px; width: 534px; height: 140px"></div>
+      </div>
+      <div data-hf-id="hf-9i7x" id="s5-cam-q3" class="cam" style="opacity: 0"><img data-hf-id="hf-pdsf" src="assets/screens/assistant-q3.png" alt="Tenant Guardian: What happens if a claim is raised?" />
+        <div data-hf-id="hf-z42l" id="s5-r-claim" class="ring" style="left: 600px; top: 387px; width: 566px; height: 156px"></div>
+      </div>
+      <div data-hf-id="hf-pp4i" id="s5-cam-no" class="cam" style="opacity: 0"><img data-hf-id="hf-b62r" src="assets/screens/assistant-landlord-unpaid.png" alt="Landlord Assistant refuses: Seize the whole guarantee now" />
+        <div data-hf-id="hf-u2vg" id="s5-r-no" class="ring" style="left: 600px; top: 387px; width: 566px; height: 262px"></div>
+        <div data-hf-id="hf-cw2w" id="s5-r-locks" class="ring" style="left: 1336px; top: 280px; width: 314px; height: 188px"></div>
+      </div>
+    </div>
+    <div data-hf-id="hf-a5cc" id="s5-src-a" class="src"><b data-hf-id="hf-9dtu">Real app</b> · Tenant Guardian: answers from the lease's rules, no language model · demo mode: 1 month = 1 minute</div>
+    <div data-hf-id="hf-dgs4" id="s5-src-b" class="src" style="opacity: 0"><b data-hf-id="hf-ti92">Real app</b> · Landlord Assistant: the guard refuses before any transaction is built</div>
+  </div>
+  <script>
+    (() => {
+      const id = "s5-agents";
+      const cue = (t, e) => window.filmCue(id, t, e);
+      const tl = gsap.timeline({ paused: true });
+      const frame = (r) => { const s = 1425 / r[2]; return { scale: s, x: -r[0] * s, y: -r[1] * s }; };
+      const TOPQ = [542, 300, 776, 436], LOWQ = [542, 520, 776, 436], LOCKS = [890, 250, 776, 436];
+      gsap.set(["#s5-cam-q1", "#s5-cam-q3", "#s5-cam-no"], { transformOrigin: "0 0", ...frame(TOPQ) });
+
+      // The window arrives as the question lands; the answer is the rule engine's own output.
+      // Blur swap on the same stage: the previous scene ends on a window in this exact place, so no blank frame.
+      tl.fromTo("#s5-win", { filter: "blur(10px)" }, { filter: "blur(0px)", duration: 0.35, ease: "power2.out" }, 0);
+      tl.fromTo("#s5-src-a", { opacity: 0 }, { opacity: 1, duration: 0.3 }, 0.6);
+
+      // "review deadlines": down to the dated lines. "prepare their next steps": the action to sign.
+      tl.to("#s5-cam-q1", { ...frame(LOWQ), duration: 0.6, ease: "power2.inOut" }, cue("review deadlines") - 0.2);
+      tl.fromTo("#s5-r-sign", { opacity: 0 }, { opacity: 1, duration: 0.25 }, cue("and prepare") + 0.3);
+      tl.to("#s5-r-sign", { opacity: 0, duration: 0.15 }, cue("They explain") - 0.25);
+
+      // "They explain the available rules": what a claim is, from the lease's own values.
+      const explain = cue("They explain") - 0.15;
+      tl.to("#s5-cam-q1", { opacity: 0, filter: "blur(8px)", duration: 0.18, ease: "power2.in" }, explain);
+      tl.fromTo("#s5-cam-q3", { opacity: 0, filter: "blur(8px)" }, { opacity: 1, filter: "blur(0px)", duration: 0.18, ease: "power2.out" }, explain + 0.12);
+      tl.fromTo("#s5-r-claim", { opacity: 0 }, { opacity: 1, duration: 0.25 }, explain + 0.5);
+
+      // "they do not replace the contract": the landlord asks for the whole guarantee; refused.
+      const refuse = cue("they do not replace") - 0.15;
+      tl.to("#s5-cam-q3", { opacity: 0, filter: "blur(8px)", duration: 0.18, ease: "power2.in" }, refuse);
+      tl.fromTo("#s5-cam-no", { opacity: 0, filter: "blur(8px)" }, { opacity: 1, filter: "blur(0px)", duration: 0.18, ease: "power2.out" }, refuse + 0.12);
+      tl.fromTo("#s5-r-no", { opacity: 0 }, { opacity: 1, duration: 0.25 }, refuse + 0.45);
+      tl.to("#s5-src-a", { opacity: 0, duration: 0.15 }, refuse);
+      tl.to("#s5-src-b", { opacity: 1, duration: 0.2 }, refuse + 0.15);
+
+      // "or take control away from the people involved": the app's three locks.
+      const locks = cue("or take control") + 0.1;
+      tl.to("#s5-r-no", { opacity: 0, duration: 0.15 }, locks);
+      tl.to("#s5-cam-no", { ...frame(LOCKS), duration: 0.7, ease: "power2.inOut" }, locks);
+      tl.fromTo("#s5-r-locks", { opacity: 0 }, { opacity: 1, duration: 0.25 }, locks + 0.7);
+      tl.to("#s5-cam-no", { ...frame([906, 262, 745, 418]), duration: window.FILM_CUES[id].duration - locks - 0.9, ease: "power1.inOut" }, locks + 0.8);
+
+      window.__timelines[id] = tl;
+    })();
+  </script>
+</template>

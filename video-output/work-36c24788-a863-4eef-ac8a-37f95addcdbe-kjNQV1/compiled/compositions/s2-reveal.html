@@ -1,0 +1,85 @@
+<template>
+  <style>
+    #root { position: absolute; inset: 0; overflow: hidden; background: #faf9fd; font-family: Inter, sans-serif; color: #171329; }
+    .win { position: absolute; overflow: hidden; border-radius: 24px; background: #faf9fd;
+      box-shadow: 0 2px 4px rgba(23,19,41,.05), 0 30px 60px -24px rgba(23,19,41,.28); }
+    .cam { position: absolute; left: 0; top: 0; width: 1920px; }
+    .cam img { display: block; width: 1920px; }
+    .ring { position: absolute; border: 3px solid #9b72e8; border-radius: 30px; opacity: 0;
+      box-shadow: 0 0 0 4000px rgba(23, 19, 41, 0.5); }
+    .chip { position: absolute; padding: 8px 18px; border-radius: 999px; background: #fff; color: #171329;
+      font-size: 24px; font-weight: 700; letter-spacing: -0.01em; white-space: nowrap; opacity: 0; }
+    .src { position: absolute; left: 248px; top: 840px; font-size: 28px; letter-spacing: -0.01em; color: #4a4560; opacity: 0; }
+    .src b { color: #6338b8; font-weight: 700; }
+    #s2-field { position: absolute; inset: 0; background: radial-gradient(120% 90% at 50% 40%, #7247cc 0%, #6338b8 45%, #4f2b98 100%); }
+    #s2-brand { position: absolute; left: 0; right: 0; top: 300px; display: flex; flex-direction: column; align-items: center; }
+    #s2-mark { width: 196px; height: 196px; }
+    #s2-word { margin-top: 44px; display: flex; gap: 6px; font-size: 128px; font-weight: 700; letter-spacing: 0.06em; color: #fff; }
+    #s2-tag { margin-top: 26px; display: flex; gap: 14px; font-size: 40px; font-weight: 500; color: rgba(255,255,255,.88); letter-spacing: -0.01em; }
+  </style>
+  <div data-hf-id="hf-ifo4" id="root" data-composition-id="s2-reveal" data-width="1920" data-height="1080">
+    <div data-hf-id="hf-xml8" id="s2-win" class="win" style="left: 248px; top: 60px; width: 1425px; height: 770px">
+      <div data-hf-id="hf-uzmy" id="s2-cam" class="cam">
+        <img data-hf-id="hf-opcc" src="assets/screens/overview-tenant.png" alt="Fiável overview, tenant view" />
+        <!-- Spotlights and labels in screenshot pixels: they move with the camera. -->
+        <div data-hf-id="hf-2uil" id="s2-r-terms" class="ring" style="left: 536px; top: 612px; width: 425px; height: 210px"></div>
+        <div data-hf-id="hf-1o4o" id="s2-r-pay" class="ring" style="left: 974px; top: 690px; width: 674px; height: 100px"></div>
+        <div data-hf-id="hf-lnc2" id="s2-r-dep" class="ring" style="left: 536px; top: 195px; width: 674px; height: 404px"></div>
+        <div data-hf-id="hf-d16z" id="s2-r-act" class="ring" style="left: 1222px; top: 195px; width: 426px; height: 404px"></div>
+        <div data-hf-id="hf-x2nw" id="s2-c-terms" class="chip" style="left: 546px; top: 562px">Lease conditions</div>
+        <div data-hf-id="hf-qhp1" id="s2-c-pay" class="chip" style="left: 984px; top: 640px">Payments</div>
+        <div data-hf-id="hf-4wsp" id="s2-c-dep" class="chip" style="left: 546px; top: 612px">Deposit protection</div>
+        <div data-hf-id="hf-y2wr" id="s2-c-act" class="chip" style="left: 1232px; top: 612px">Guided actions</div>
+      </div>
+    </div>
+    <div data-hf-id="hf-d4wo" id="s2-src" class="src"><b data-hf-id="hf-9dtu">Real app</b> · front/ replaying LeaseVault v5 lease #0 from its testnet record · demo mode: 1 month = 1 minute</div>
+
+    <div data-hf-id="hf-9l1h" id="s2-field"></div>
+    <div data-hf-id="hf-ed5u" id="s2-brand">
+      <svg data-hf-id="hf-gfga" id="s2-mark" viewBox="0 0 32 32" aria-label="Fiável">
+        <rect data-hf-id="hf-6fhm" id="s2-tile" width="32" height="32" rx="10" fill="#fff" />
+        <path data-hf-id="hf-b3dw" id="s2-shield" d="M16 7.5 23 10v5.6c0 4.6-3 7.7-7 8.9-4-1.2-7-4.3-7-8.9V10l7-2.5Z" fill="#6338b8" />
+        <path data-hf-id="hf-3iqc" id="s2-check" d="m12.6 15.8 2.4 2.4 4.4-4.6" stroke="#fff" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round" pathLength="100" stroke-dasharray="100 120" stroke-dashoffset="110" />
+      </svg>
+      <div data-hf-id="hf-d393" id="s2-word"><span data-hf-id="hf-k011">F</span><span data-hf-id="hf-jlq0">I</span><span data-hf-id="hf-3uzk">Á</span><span data-hf-id="hf-dn4l">V</span><span data-hf-id="hf-l6y4">E</span><span data-hf-id="hf-hm6v">L</span></div>
+      <div data-hf-id="hf-mh5t" id="s2-tag"><span data-hf-id="hf-da86">Fair rentals.</span><span data-hf-id="hf-tdkx">Enforced by Stellar.</span><span data-hf-id="hf-rt8m">Explained by agents.</span></div>
+    </div>
+  </div>
+  <script>
+    (() => {
+      const id = "s2-reveal";
+      const cue = (t, e) => window.filmCue(id, t, e);
+      const tl = gsap.timeline({ paused: true });
+      // Frame the overview region x 520..1660, y 160..800 (screenshot px) in the 1425 px window.
+      const S = 1425 / 1140;
+      gsap.set("#s2-cam", { transformOrigin: "0 0", scale: S, x: -520 * S, y: -160 * S });
+
+      // The mark is performed on the field S1 flooded: tile, shield, then the check is drawn.
+      tl.fromTo("#s2-mark", { scale: 0.55, opacity: 0 }, { scale: 1, opacity: 1, duration: 0.55, ease: "back.out(1.5)" }, 0.15);
+      tl.fromTo("#s2-shield", { scale: 0.6, opacity: 0, transformOrigin: "50% 50%" }, { scale: 1, opacity: 1, duration: 0.35, ease: "power3.out" }, 0.35);
+      tl.to("#s2-check", { strokeDashoffset: 0, duration: 0.4, ease: "power2.out" }, 0.6);
+      tl.fromTo("#s2-word span", { opacity: 0.0, filter: "blur(8px)" }, { opacity: 1, filter: "blur(0px)", duration: 0.2, stagger: 0.09, ease: "power2.out" }, 0.75);
+      tl.fromTo("#s2-tag span", { opacity: 0, filter: "blur(6px)" }, { opacity: 1, filter: "blur(0px)", duration: 0.2, stagger: 0.32, ease: "power2.out" }, cue("Fiável is building") + 0.1);
+
+      // "It brings lease conditions...": the field shrinks into the app's own guarantee card.
+      const carry = cue("It brings") - 0.55;
+      tl.to("#s2-brand", { opacity: 0, filter: "blur(10px)", scale: 0.92, duration: 0.3, ease: "power2.in" }, carry);
+      tl.fromTo("#s2-field", { clipPath: "inset(0% 0% 0% 0% round 0px)" },
+        { clipPath: "inset(10.30% 42.58% 44.33% 14.32% round 35px)", duration: 0.65, ease: "power3.inOut" }, carry);
+      tl.to("#s2-field", { opacity: 0, duration: 0.25, ease: "power1.out" }, carry + 0.62);
+      tl.fromTo("#s2-src", { opacity: 0 }, { opacity: 1, duration: 0.3 }, carry + 0.7);
+
+      // One focus at a time, on the word that names it.
+      const marks = [["terms", "It brings lease"], ["pay", "payments"], ["dep", "deposit protection"], ["act", "and guided actions"]];
+      marks.forEach(([k, t], i) => {
+        const at = cue(t) + 0.05;
+        tl.fromTo(`#s2-r-${k}`, { opacity: 0 }, { opacity: 1, duration: 0.25, ease: "power2.out" }, at);
+        tl.fromTo(`#s2-c-${k}`, { opacity: 0, filter: "blur(6px)" }, { opacity: 1, filter: "blur(0px)", duration: 0.18, ease: "power2.out" }, at + 0.05);
+        const next = i + 1 < marks.length ? cue(marks[i + 1][1]) : cue("and guided actions", 1) + 0.9;
+        tl.to([`#s2-r-${k}`, `#s2-c-${k}`], { opacity: 0, duration: 0.15, ease: "power2.in" }, next - 0.1);
+      });
+
+      window.__timelines[id] = tl;
+    })();
+  </script>
+</template>

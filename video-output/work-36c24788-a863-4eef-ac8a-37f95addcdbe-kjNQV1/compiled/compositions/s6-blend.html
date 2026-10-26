@@ -1,0 +1,70 @@
+<template>
+  <style>
+    #root { position: absolute; inset: 0; overflow: hidden; background: #faf9fd; font-family: Inter, sans-serif; color: #171329; }
+    .win { position: absolute; overflow: hidden; border-radius: 24px; background: #faf9fd;
+      box-shadow: 0 2px 4px rgba(23,19,41,.05), 0 30px 60px -24px rgba(23,19,41,.28); }
+    .cam { position: absolute; left: 0; top: 0; width: 1920px; }
+    .cam img { display: block; width: 1920px; }
+    .ring { position: absolute; border: 3px solid #9b72e8; border-radius: 18px; opacity: 0; box-shadow: 0 0 0 4000px rgba(23, 19, 41, 0.42); }
+    .src { position: absolute; left: 248px; top: 840px; font-size: 28px; letter-spacing: -0.01em; color: #4a4560; }
+    .src b { color: #6338b8; font-weight: 700; }
+    #s6-tag { position: absolute; right: 248px; top: 838px; padding: 4px 14px; border-radius: 999px; background: #fbf2e4;
+      color: #8a5a1a; font-size: 28px; font-weight: 700; }
+  </style>
+  <div data-hf-id="hf-kcrg" id="root" data-composition-id="s6-blend" data-width="1920" data-height="1080">
+    <div data-hf-id="hf-22a0" id="s6-win" class="win" style="left: 248px; top: 60px; width: 1425px; height: 770px">
+      <div data-hf-id="hf-avbf" id="s6-cam-join" class="cam"><img data-hf-id="hf-tsfr" src="assets/screens/join-terms.png" alt="Invitation to lease #0: terms and funding choices" />
+        <div data-hf-id="hf-zirp" id="s6-r-yield" class="ring" style="left: 1210px; top: 738px; width: 418px; height: 62px"></div>
+        <div data-hf-id="hf-cuzg" id="s6-r-lock" class="ring" style="left: 1212px; top: 1142px; width: 414px; height: 76px"></div>
+        <div data-hf-id="hf-5ew3" id="s6-r-risk" class="ring" style="left: 558px; top: 866px; width: 598px; height: 128px"></div>
+      </div>
+      <div data-hf-id="hf-7azn" id="s6-cam-inv" class="cam" style="opacity: 0"><img data-hf-id="hf-r307" src="assets/screens/lease-landlord.png" alt="Lease #0: Invest the guarantee, invested on Blend" />
+        <div data-hf-id="hf-n9xz" id="s6-r-inv" class="ring" style="left: 536px; top: 1115px; width: 550px; height: 243px; border-radius: 26px"></div>
+      </div>
+    </div>
+    <div data-hf-id="hf-jt9c" id="s6-src" class="src"><b data-hf-id="hf-9dtu">Real app</b> · lease #0's yield option</div>
+    <div data-hf-id="hf-r9sl" id="s6-tag">Stellar Testnet · Blend test pool · test USDC</div>
+  </div>
+  <script>
+    (() => {
+      const id = "s6-blend";
+      const cue = (t, e) => window.filmCue(id, t, e);
+      const D = window.FILM_CUES[id].duration;
+      const tl = gsap.timeline({ paused: true });
+      const frame = (r) => { const s = 1425 / r[2]; return { scale: s, x: -r[0] * s, y: -r[1] * s }; };
+      const YIELD = [1160, 560, 560, 315], LOCK = [1160, 930, 560, 315], RISK = [520, 720, 750, 421], INV = [470, 1060, 700, 394];
+      gsap.set("#s6-cam-join", { transformOrigin: "0 0", ...frame(YIELD) });
+      gsap.set("#s6-cam-inv", { transformOrigin: "0 0", ...frame(INV) });
+
+      // Blur swap on the same stage: the previous scene ends on a window in this exact place, so no blank frame.
+      tl.fromTo("#s6-win", { filter: "blur(10px)" }, { filter: "blur(0px)", duration: 0.35, ease: "power2.out" }, 0);
+      tl.fromTo(["#s6-src", "#s6-tag"], { opacity: 0 }, { opacity: 1, duration: 0.3, stagger: 0.15 }, 0.5);
+
+      // "...putting eligible deposit funds to work through Blend": the option as written in the terms.
+      tl.fromTo("#s6-r-yield", { opacity: 0 }, { opacity: 1, duration: 0.25 }, cue("Fiável explores") + 0.3);
+
+      // "with explicit consent": the tenant's two choices; accepting the option is its own button.
+      const consent = cue("with explicit consent") - 0.15;
+      tl.to("#s6-r-yield", { opacity: 0, duration: 0.15 }, consent);
+      tl.to("#s6-cam-join", { ...frame(LOCK), duration: 0.5, ease: "power2.inOut" }, consent);
+      tl.fromTo("#s6-r-lock", { opacity: 0 }, { opacity: 1, duration: 0.25 }, consent + 0.5);
+
+      // "and clear limits": both parties approve, one month always stays in the contract.
+      const limits = cue("with explicit consent") + 1.45;
+      tl.to("#s6-r-lock", { opacity: 0, duration: 0.12 }, limits);
+      tl.to("#s6-cam-join", { opacity: 0, filter: "blur(8px)", duration: 0.18, ease: "power2.in" }, limits);
+      tl.fromTo("#s6-cam-inv", { opacity: 0, filter: "blur(8px)" }, { opacity: 1, filter: "blur(0px)", duration: 0.18, ease: "power2.out" }, limits + 0.12);
+      tl.fromTo("#s6-r-inv", { opacity: 0 }, { opacity: 1, duration: 0.25 }, limits + 0.4);
+
+      // "Investment involves risk, and returns are never guaranteed": the app's own words.
+      const risk = cue("Investment involves") - 0.15;
+      tl.set("#s6-cam-join", { ...frame(RISK) }, risk);
+      tl.to("#s6-cam-inv", { opacity: 0, filter: "blur(8px)", duration: 0.18, ease: "power2.in" }, risk);
+      tl.to("#s6-cam-join", { opacity: 1, filter: "blur(0px)", duration: 0.18, ease: "power2.out" }, risk + 0.12);
+      tl.fromTo("#s6-r-risk", { opacity: 0 }, { opacity: 1, duration: 0.25 }, risk + 0.45);
+      tl.to("#s6-cam-join", { ...frame([540, 740, 712, 400]), duration: D - risk - 0.6, ease: "power1.inOut" }, risk + 0.5);
+
+      window.__timelines[id] = tl;
+    })();
+  </script>
+</template>

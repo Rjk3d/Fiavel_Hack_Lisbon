@@ -1,0 +1,107 @@
+<template>
+  <style>
+    #root { position: absolute; inset: 0; overflow: hidden; background: #faf9fd; font-family: Inter, sans-serif; color: #171329; }
+    #s1-tiles { position: absolute; inset: 0; opacity: 0.55;
+      -webkit-mask-image: linear-gradient(90deg, transparent 0%, transparent 34%, #000 62%);
+      mask-image: linear-gradient(90deg, transparent 0%, transparent 34%, #000 62%); }
+    #s1-copy { position: absolute; left: 150px; top: 300px; width: 720px; }
+    .s1-title { position: absolute; left: 0; top: 0; width: 720px; font-size: 68px; line-height: 1.08; font-weight: 700; letter-spacing: -0.03em; }
+    .s1-title b { color: #6338b8; font-weight: 700; }
+    .s1-title .w { display: inline-block; }
+    #s1-paper-wrap { position: absolute; left: 1010px; top: 64px; width: 770px; height: 820px; }
+    #s1-paper { position: absolute; inset: 0; background: #fff; border-radius: 8px; padding: 56px 64px;
+      box-shadow: 0 2px 4px rgba(23,19,41,.06), 0 30px 60px -28px rgba(23,19,41,.35); }
+    .s1-kicker { font-size: 17px; font-weight: 700; letter-spacing: 0.16em; color: #777487; }
+    .s1-h { margin-top: 10px; font-size: 40px; font-weight: 700; letter-spacing: -0.02em; }
+    .s1-addr { margin-top: 6px; font-size: 22px; color: #777487; }
+    .s1-rule { margin: 26px 0 14px; height: 1px; background: #eae7f1; }
+    .s1-row { position: relative; display: flex; align-items: baseline; gap: 12px; height: 50px; font-size: 24px; }
+    .s1-row .k { width: 270px; color: #4a4560; }
+    .s1-row .v { flex: 1; border-bottom: 2px dotted #d6d1e4; height: 30px; font-weight: 600; }
+    .s1-row .q { position: absolute; right: -6px; top: 2px; font-size: 30px; font-weight: 900; color: #b97924; opacity: 0; }
+    #s1-band { position: absolute; left: 44px; right: 44px; top: 403px; height: 50px; border-radius: 10px; background: #f3eeff; }
+    .s1-sign { position: absolute; bottom: 60px; width: 260px; border-top: 2px solid #171329; padding-top: 8px; font-size: 18px; color: #777487; }
+    #s1-flood { position: absolute; inset: 0; background: #6338b8; clip-path: inset(40.26% 8.96% 54.79% 53.03% round 10px); opacity: 0; }
+  </style>
+  <div data-hf-id="hf-rjul" id="root" data-composition-id="s1-problem" data-width="1920" data-height="1080">
+    <svg data-hf-id="hf-bcl1" id="s1-tiles" width="1920" height="1080" aria-hidden="true">
+      <defs data-hf-id="hf-mh0t">
+        <!-- Azulejo motif: a four-petal tile repeated, in the brand's lavender. -->
+        <pattern data-hf-id="hf-nsmt" id="s1-azulejo" width="120" height="120" patternUnits="userSpaceOnUse">
+          <rect data-hf-id="hf-fdof" width="120" height="120" fill="#f3eeff" />
+          <path data-hf-id="hf-194z" d="M60 14c10 18 10 28 0 46-10-18-10-28 0-46Zm0 92c-10-18-10-28 0-46 10 18 10 28 0 46ZM14 60c18-10 28-10 46 0-18 10-28 10-46 0Zm92 0c-18 10-28 10-46 0 18-10 28-10 46 0Z" fill="none" stroke="#9b72e8" stroke-width="2.4" />
+          <circle data-hf-id="hf-148z" cx="60" cy="60" r="7" fill="#9b72e8" />
+          <path data-hf-id="hf-gcqj" d="M0 0h18M0 0v18M120 0h-18M120 0v18M0 120h18M0 120v-18M120 120h-18M120 120v-18" stroke="#9b72e8" stroke-width="2.4" />
+          <rect data-hf-id="hf-wt7k" x="0.5" y="0.5" width="119" height="119" fill="none" stroke="#e1d6fb" />
+        </pattern>
+      </defs>
+      <rect data-hf-id="hf-fqru" width="1920" height="1080" fill="url(#s1-azulejo)" />
+    </svg>
+
+    <!-- A prop: its rows are read through the titles and the voice, so the type floor is not applied to it. -->
+    <div data-hf-id="hf-v2dm" id="s1-paper-wrap" data-layout-ignore>
+      <div data-hf-id="hf-xmu8" id="s1-paper">
+        <div data-hf-id="hf-l7rz" class="s1-kicker">CONTRATO DE ARRENDAMENTO</div>
+        <div data-hf-id="hf-jjc5" class="s1-h">Rental agreement</div>
+        <div data-hf-id="hf-lwx1" class="s1-addr">Rua de Arroios 74, 2.º Esq. · Lisboa</div>
+        <div data-hf-id="hf-5la3" class="s1-rule"></div>
+        <div data-hf-id="hf-qi9z" id="s1-band"></div>
+        <div data-hf-id="hf-6enb" class="s1-row"><span data-hf-id="hf-46ro" class="k">Tenant</span><span data-hf-id="hf-2k75" class="v">Ana Costa</span></div>
+        <div data-hf-id="hf-uf5z" class="s1-row"><span data-hf-id="hf-ub4u" class="k">Landlord</span><span data-hf-id="hf-5ktz" class="v">Manuel Ferreira</span></div>
+        <div data-hf-id="hf-u0uy" class="s1-row"><span data-hf-id="hf-ypmo" class="k">Monthly rent</span><span data-hf-id="hf-gipt" class="v"></span></div>
+        <div data-hf-id="hf-tmjx" class="s1-row"><span data-hf-id="hf-9n9q" class="k">Term</span><span data-hf-id="hf-9jv9" class="v"></span></div>
+        <div data-hf-id="hf-wep4" class="s1-row"><span data-hf-id="hf-jxhp" id="s1-dep-k" class="k">Deposit (caução)</span><span data-hf-id="hf-aqsc" class="v"></span></div>
+        <div data-hf-id="hf-w0e3" class="s1-row"><span data-hf-id="hf-l5mo" class="k">Held by</span><span data-hf-id="hf-achb" class="v"></span><span data-hf-id="hf-6cw0" id="s1-q1" class="q">?</span></div>
+        <div data-hf-id="hf-vm32" class="s1-row"><span data-hf-id="hf-nn8d" class="k">Returned when</span><span data-hf-id="hf-bjee" class="v"></span><span data-hf-id="hf-lb1t" id="s1-q2" class="q">?</span></div>
+        <div data-hf-id="hf-v7s1" class="s1-row"><span data-hf-id="hf-dsc6" class="k">Disputes decided by</span><span data-hf-id="hf-b53d" class="v"></span><span data-hf-id="hf-5wqu" id="s1-q3" class="q">?</span></div>
+        <div data-hf-id="hf-t1e9" class="s1-sign" style="left: 64px">Tenant</div>
+        <div data-hf-id="hf-pree" class="s1-sign" style="right: 64px">Landlord</div>
+      </div>
+    </div>
+
+    <div data-hf-id="hf-5js1" id="s1-copy">
+      <h1 data-hf-id="hf-4dbn" id="s1-t1" class="s1-title"><span data-hf-id="hf-n9ad" class="w">Finding</span> <span data-hf-id="hf-b7a3" class="w">a</span> <span data-hf-id="hf-1k67" class="w">home</span> <span data-hf-id="hf-igab" class="w">should</span> <span data-hf-id="hf-nx4s" class="w">feel</span> <span data-hf-id="hf-8msr" class="w">like</span> <span data-hf-id="hf-7zyz" class="w">a</span> <span data-hf-id="hf-n8t8" class="w">fresh</span> <span data-hf-id="hf-v7q6" class="w">start.</span></h1>
+      <h1 data-hf-id="hf-vpfs" id="s1-t2" class="s1-title"><span data-hf-id="hf-civn" class="w">Your</span> <span data-hf-id="hf-5ej2" class="w">deposit</span> <span data-hf-id="hf-jjv7" class="w">deserves</span> <span data-hf-id="hf-fr20" class="w"><b data-hf-id="hf-oiqk">protection.</b></span></h1>
+    </div>
+
+    <div data-hf-id="hf-ylti" id="s1-flood"></div>
+  </div>
+  <script>
+    (() => {
+      const id = "s1-problem";
+      const D = window.FILM_CUES[id].duration;
+      const cue = (t, e) => window.filmCue(id, t, e);
+      const tl = gsap.timeline({ paused: true });
+
+      // Frame 0 already shows the paper on its tiles; the camera drifts toward the deposit rows.
+      tl.fromTo("#s1-paper-wrap", { scale: 1, x: 0, y: 0, transformOrigin: "50% 60%" }, { scale: 1.07, x: -12, y: -26, duration: cue("Fiável starts"), ease: "power1.inOut" }, 0);
+      tl.fromTo("#s1-tiles", { x: 0 }, { x: -40, duration: D, ease: "none" }, 0);
+
+      // Title 1, word by word from blur, then held still.
+      tl.fromTo("#s1-t1 .w", { opacity: 0, filter: "blur(6px)" }, { opacity: 1, filter: "blur(0px)", duration: 0.16, stagger: 0.07, ease: "power2.out" }, 0.35);
+
+      // The deposit row lights up when the voice names it; doubts land on the rows nobody wrote.
+      tl.fromTo("#s1-band", { backgroundColor: "#f3eeff", scaleX: 0.0, transformOrigin: "0% 50%" }, { scaleX: 1, duration: 0.5, ease: "power3.out" }, cue("a rental deposit") + 0.3);
+      [["#s1-q2", "a rental deposit", 1.7], ["#s1-q1", "mistrust", 0.1], ["#s1-q3", "and disputes", 0.1]].forEach(([q, t, d]) => {
+        tl.fromTo(q, { opacity: 0, scale: 1.6 }, { opacity: 1, scale: 1, duration: 0.3, ease: "back.out(1.6)" }, cue(t) + d);
+      });
+
+      // Second title replaces the first on "Fiável starts with a simple question".
+      tl.to("#s1-t1 .w", { opacity: 0, filter: "blur(6px)", duration: 0.18, stagger: 0.02, ease: "power2.in" }, cue("Fiável starts") - 0.25);
+      tl.fromTo("#s1-t2 .w", { opacity: 0, filter: "blur(6px)" }, { opacity: 1, filter: "blur(0px)", duration: 0.16, stagger: 0.08, ease: "power2.out" }, cue("Fiável starts") + 0.1);
+
+      // "...clear from day one?": the doubts clear, the deposit row turns brand.
+      tl.to(["#s1-q1", "#s1-q2", "#s1-q3"], { opacity: 0, duration: 0.25, ease: "power2.in" }, cue("what if the rules"));
+      tl.to("#s1-band", { backgroundColor: "#6338b8", duration: 0.4, ease: "power2.inOut" }, cue("what if the rules") + 0.2);
+      tl.to("#s1-dep-k", { color: "#ffffff", fontWeight: 700, duration: 0.4, ease: "power2.inOut" }, cue("what if the rules") + 0.2);
+
+      // The deposit row becomes the next world: it grows to fill the frame (0.65 s, in-out).
+      const flood = D - 1.25;
+      tl.set("#s1-flood", { opacity: 1 }, flood);
+      tl.fromTo("#s1-flood", { clipPath: "inset(40.26% 8.96% 54.79% 53.03% round 10px)" }, { clipPath: "inset(0% 0% 0% 0% round 0px)", duration: 0.75, ease: "power3.inOut" }, flood);
+      tl.to(["#s1-copy", "#s1-paper-wrap"], { filter: "blur(14px)", opacity: 0.4, duration: 0.4, ease: "power2.in" }, flood);
+
+      window.__timelines[id] = tl;
+    })();
+  </script>
+</template>
